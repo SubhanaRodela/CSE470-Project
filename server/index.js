@@ -13,9 +13,21 @@ app.use(express.json());
 
 // MongoDB Connection
 const mongoUrl = process.env.MONGO_URL || 'mongodb://localhost:27017/rodela';
-mongoose.connect(mongoUrl)
-  .then(() => console.log('Connected to MongoDB'))
-  .catch(err => console.error('MongoDB connection error:', err));
+console.log('Attempting to connect to MongoDB at:', mongoUrl);
+
+mongoose.connect(mongoUrl, {
+  useNewUrlParser: true,
+  useUnifiedTopology: true,
+})
+.then(() => {
+  console.log('✅ Connected to MongoDB successfully');
+  console.log('Database:', mongoose.connection.name);
+})
+.catch(err => {
+  console.error('❌ MongoDB connection error:', err);
+  console.error('Please make sure MongoDB is running on your system');
+  console.error('You can start MongoDB with: mongod --dbpath C:\\data\\db');
+});
 
 // Routes
 app.use('/api/auth', authRoutes);
@@ -23,6 +35,22 @@ app.use('/api/auth', authRoutes);
 // Basic route
 app.get('/', (req, res) => {
   res.json({ message: 'Welcome to Rodela API' });
+});
+
+// Test route
+app.get('/test', (req, res) => {
+  res.json({ message: 'Server is working', timestamp: new Date().toISOString() });
+});
+
+// Health check route
+app.get('/health', (req, res) => {
+  const dbStatus = mongoose.connection.readyState === 1 ? 'connected' : 'disconnected';
+  res.json({ 
+    message: 'Health check', 
+    server: 'running',
+    database: dbStatus,
+    timestamp: new Date().toISOString() 
+  });
 });
 
 const PORT = process.env.PORT || 5000;

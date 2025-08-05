@@ -117,11 +117,17 @@ const login = async (req, res) => {
 // Update profile
 const updateProfile = async (req, res) => {
   try {
+    console.log('Update profile request received');
+    console.log('User from token:', req.user);
+    console.log('Request body:', req.body);
+    
     const userId = req.user.userId;
     const { name, email, phone, password, longitude, latitude } = req.body;
 
     // Find user by ID
     const user = await User.findById(userId);
+    console.log('Found user:', user);
+    
     if (!user) {
       return res.status(404).json({ message: 'User not found' });
     }
