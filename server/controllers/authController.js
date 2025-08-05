@@ -178,8 +178,73 @@ const updateProfile = async (req, res) => {
   }
 };
 
+// Search service providers
+const searchServiceProviders = async (req, res) => {
+  try {
+    const { query } = req.query;
+    
+    let searchQuery = {};
+    
+    if (query && query.trim().length >= 2) {
+      // If search query provided, filter by name or occupation
+      searchQuery = {
+        userType: 'service provider',
+        $or: [
+          { name: { $regex: query, $options: 'i' } },
+          { occupation: { $regex: query, $options: 'i' } }
+        ]
+      };
+    } else {
+      // If no query or short query, return all service providers
+      searchQuery = {
+        userType: 'service provider'
+      };
+    }
+
+    // Search for service providers
+    const serviceProviders = await User.find(searchQuery)
+      .select('name occupation longitude latitude phone')
+      .sort({ name: 1 }); // Sort by name alphabetically
+
+    console.log('=== Service Provider Search Debug ===');
+    console.log('Search query:', JSON.stringify(searchQuery, null, 2));
+    console.log('Found service providers:', serviceProviders.length);
+    console.log('Service providers:', JSON.stringify(serviceProviders, null, 2));
+    console.log('=====================================');
+
+    res.json({
+      message: query ? 'Service providers found' : 'All service providers',
+      serviceProviders
+    });
+
+  } catch (error) {
+    console.error('Search service providers error:', error);
+    res.status(500).json({ message: 'Server error during search' });
+  }
+};
+
+// Test endpoint to check all users
+const getAllUsers = async (req, res) => {
+  try {
+    const allUsers = await User.find({}).select('name email userType occupation');
+    console.log('All users in database:', allUsers.length);
+    console.log('Users:', JSON.stringify(allUsers, null, 2));
+    
+    res.json({
+      message: 'All users retrieved',
+      totalUsers: allUsers.length,
+      users: allUsers
+    });
+  } catch (error) {
+    console.error('Get all users error:', error);
+    res.status(500).json({ message: 'Server error' });
+  }
+};
+
 module.exports = {
   register,
   login,
-  updateProfile
+  updateProfile,
+  searchServiceProviders,
+  getAllUsers
 }; 

@@ -53,6 +53,14 @@ const UserDashboard = () => {
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [selectedLocation, setSelectedLocation] = useState(null);
   const [markers, setMarkers] = useState([]);
+  
+  // Service provider search states
+  const [providerSearchQuery, setProviderSearchQuery] = useState('');
+  const [providerSuggestions, setProviderSuggestions] = useState([]);
+  const [showProviderSuggestions, setShowProviderSuggestions] = useState(false);
+  const [selectedProvider, setSelectedProvider] = useState(null);
+  const [allProviders, setAllProviders] = useState([]);
+  
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -71,7 +79,31 @@ const UserDashboard = () => {
     }
 
     setUser(userInfo);
+    
+    // Load all service providers on component mount
+    loadAllServiceProviders();
   }, [navigate]);
+
+  // Load all service providers
+  const loadAllServiceProviders = async () => {
+    try {
+      console.log('Loading all service providers...');
+      const response = await fetch(
+        'http://localhost:5000/api/auth/search-service-providers'
+      );
+      const data = await response.json();
+      console.log('Service providers response:', data);
+      console.log('Service providers count:', data.serviceProviders?.length || 0);
+      setAllProviders(data.serviceProviders || []);
+      
+      // Also test the all-users endpoint
+      const allUsersResponse = await fetch('http://localhost:5000/api/auth/all-users');
+      const allUsersData = await allUsersResponse.json();
+      console.log('All users in database:', allUsersData);
+    } catch (error) {
+      console.error('Error loading service providers:', error);
+    }
+  };
 
   // Geocoding function using Nominatim (OpenStreetMap's geocoding service)
   const searchLocation = async (query) => {
@@ -115,6 +147,51 @@ const UserDashboard = () => {
     setSelectedLocation(newMarker);
     
     // Fly to the selected location
+    if (mapRef.current) {
+      mapRef.current.setView(newMarker.position, 15);
+    }
+  };
+
+  // Service provider search function
+  const searchServiceProviders = async (query) => {
+    try {
+      const url = query.length >= 2 
+        ? `http://localhost:5000/api/auth/search-service-providers?query=${encodeURIComponent(query)}`
+        : 'http://localhost:5000/api/auth/search-service-providers';
+      
+      const response = await fetch(url);
+      const data = await response.json();
+      setProviderSuggestions(data.serviceProviders || []);
+      setShowProviderSuggestions(true);
+    } catch (error) {
+      console.error('Error searching service providers:', error);
+    }
+  };
+
+  const handleProviderSearchChange = (e) => {
+    const query = e.target.value;
+    setProviderSearchQuery(query);
+    searchServiceProviders(query);
+  };
+
+  const handleProviderSuggestionClick = (provider) => {
+    setProviderSearchQuery(`${provider.name} - ${provider.occupation}`);
+    setShowProviderSuggestions(false);
+    setProviderSuggestions([]);
+    
+    const newMarker = {
+      id: `provider-${provider._id}`,
+      position: [provider.latitude, provider.longitude],
+      name: provider.name,
+      type: 'Service Provider',
+      occupation: provider.occupation,
+      phone: provider.phone
+    };
+    
+    setMarkers(prev => [...prev.filter(m => !m.id.startsWith('provider-')), newMarker]);
+    setSelectedProvider(provider);
+    
+    // Fly to the selected provider location
     if (mapRef.current) {
       mapRef.current.setView(newMarker.position, 15);
     }
@@ -194,6 +271,81 @@ const UserDashboard = () => {
                 </p>
               </div>
             )}
+
+            <hr className="my-4" />
+            
+            <h3>Service Provider Search</h3>
+            <div className="search-container">
+              <input
+                type="text"
+                className="search-input"
+                placeholder="Search by name or occupation..."
+                value={providerSearchQuery}
+                onChange={handleProviderSearchChange}
+                onFocus={() => setShowProviderSuggestions(true)}
+              />
+              {showProviderSuggestions && providerSuggestions.length > 0 && (
+                <div className="search-suggestions">
+                  {providerSuggestions.map((provider, index) => (
+                    <div
+                      key={index}
+                      className="suggestion-item"
+                      onClick={() => handleProviderSuggestionClick(provider)}
+                    >
+                      <div>
+                        <strong>{provider.name}</strong>
+                        <br />
+                        <small className="text-muted">{provider.occupation}</small>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            
+            {selectedProvider && (
+              <div className="selected-location">
+                <h5>Selected Service Provider:</h5>
+                <p className="mb-1"><strong>{selectedProvider.name}</strong></p>
+                <p className="text-muted small mb-1">
+                  Occupation: {selectedProvider.occupation}
+                </p>
+                <p className="text-muted small">
+                  Phone: {selectedProvider.phone}
+                </p>
+              </div>
+            )}
+
+            <hr className="my-4" />
+            
+            <h5>All Service Providers</h5>
+            <div className="all-providers-list">
+              {allProviders.length > 0 ? (
+                allProviders.map((provider, index) => (
+                  <div
+                    key={index}
+                    className="provider-item"
+                    onClick={() => handleProviderSuggestionClick(provider)}
+                  >
+                    <div className="provider-info">
+                      <strong>{provider.name}</strong>
+                      <br />
+                      <small className="text-muted">{provider.occupation}</small>
+                    </div>
+                    <button className="btn btn-sm btn-outline-primary">
+                      <i className="bi bi-geo-alt"></i> Show on Map
+                    </button>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center p-3">
+                  <p className="text-muted mb-2">No service providers found</p>
+                  <small className="text-muted">
+                    Service providers will appear here once they register
+                  </small>
+                </div>
+              )}
+            </div>
           </div>
 
           {/* Map Area */}
@@ -214,7 +366,13 @@ const UserDashboard = () => {
                   <Popup>
                     <div>
                       <h6>{marker.name}</h6>
-                      <p className="mb-0">Type: {marker.type}</p>
+                      <p className="mb-1">Type: {marker.type}</p>
+                      {marker.occupation && (
+                        <p className="mb-1"><strong>Occupation:</strong> {marker.occupation}</p>
+                      )}
+                      {marker.phone && (
+                        <p className="mb-0"><strong>Phone:</strong> {marker.phone}</p>
+                      )}
                     </div>
                   </Popup>
                 </Marker>

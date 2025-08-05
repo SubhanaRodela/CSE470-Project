@@ -150,4 +150,45 @@
 
 .leaflet-popup-tip {
   box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+}
+
+/* All Providers List Styles */
+.all-providers-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: white;
+}
+
+.provider-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f8f9fa;
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+}
+
+.provider-item:hover {
+  background-color: #f8f9fa;
+}
+
+.provider-item:last-child {
+  border-bottom: none;
+}
+
+.provider-info {
+  flex: 1;
+}
+
+.provider-item .btn {
+  margin-left: 10px;
+  font-size: 12px;
+  padding: 4px 8px;
+}
+
+.provider-item .btn i {
+  margin-right: 4px;
 } 

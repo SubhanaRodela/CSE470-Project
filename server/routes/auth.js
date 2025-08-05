@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { register, login, updateProfile } = require('../controllers/authController');
+const { register, login, updateProfile, searchServiceProviders, getAllUsers } = require('../controllers/authController');
 const { authenticateToken } = require('../middleware/auth');
 
 // Register route
@@ -11,5 +11,11 @@ router.post('/login', login);
 
 // Update profile route (protected)
 router.put('/update-profile', authenticateToken, updateProfile);
+
+// Search service providers route (public)
+router.get('/search-service-providers', searchServiceProviders);
+
+// Test route to get all users (for debugging)
+router.get('/all-users', getAllUsers);
 
 module.exports = router; 
