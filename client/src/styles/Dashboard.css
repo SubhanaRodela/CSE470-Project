@@ -1,0 +1,55 @@
+.dashboard-container {
+  min-height: 100vh;
+  background: white;
+}
+
+.dashboard-container .navbar {
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-container .card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+}
+
+.dashboard-container .user-info h2 {
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.dashboard-container .badge {
+  font-size: 1rem;
+  padding: 8px 16px;
+  border-radius: 20px;
+}
+
+.dashboard-container .card .card-body {
+  transition: all 0.3s ease;
+}
+
+.dashboard-container .card:hover {
+  transform: translateY(-5px);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.15);
+}
+
+.dashboard-container .btn {
+  border-radius: 25px;
+  padding: 10px 25px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.dashboard-container .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+}
+
+.dashboard-container .card-title {
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.dashboard-container .card-text {
+  color: #7f8c8d;
+} 

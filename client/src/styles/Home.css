@@ -1,0 +1,34 @@
+.home-container {
+  min-height: 100vh;
+  background: white;
+  padding: 20px 0;
+}
+
+.home-container .card {
+  border: none;
+  border-radius: 15px;
+  box-shadow: 0 5px 20px rgba(0, 0, 0, 0.1);
+  background: white;
+}
+
+.home-container h1 {
+  color: #2c3e50;
+  font-weight: 700;
+}
+
+.home-container .lead {
+  color: #7f8c8d;
+  font-size: 1.2rem;
+}
+
+.home-container .btn {
+  border-radius: 25px;
+  padding: 12px 30px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+.home-container .btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 5px 15px rgba(0, 0, 0, 0.2);
+} 
