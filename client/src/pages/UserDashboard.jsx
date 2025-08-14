@@ -66,6 +66,10 @@ const UserDashboard = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedProviderForReview, setSelectedProviderForReview] = useState(null);
   
+  // Favorite states
+  const [favorites, setFavorites] = useState([]);
+  const [favoriteStatuses, setFavoriteStatuses] = useState({});
+  
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -85,8 +89,9 @@ const UserDashboard = () => {
 
     setUser(userInfo);
     
-    // Load all service providers on component mount
+    // Load all service providers and favorites on component mount
     loadAllServiceProviders();
+    loadUserFavorites();
   }, [navigate]);
 
   // Load all service providers
@@ -113,6 +118,90 @@ const UserDashboard = () => {
       console.log('All users in database:', allUsersData);
     } catch (error) {
       console.error('Error loading service providers:', error);
+    }
+  };
+
+  // Load user's favorite service providers
+  const loadUserFavorites = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) return;
+
+      const response = await fetch('http://localhost:5000/api/favorites/user', {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      const data = await response.json();
+      if (data.success) {
+        setFavorites(data.favorites || []);
+        
+        // Create a map of favorite statuses for quick lookup
+        const statusMap = {};
+        data.favorites.forEach(fav => {
+          statusMap[fav.serviceProvider.id] = true;
+        });
+        setFavoriteStatuses(statusMap);
+      }
+    } catch (error) {
+      console.error('Error loading favorites:', error);
+    }
+  };
+
+  // Toggle favorite status for a service provider
+  const toggleFavorite = async (provider) => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const isCurrentlyFavorite = favoriteStatuses[provider.id];
+      
+      if (isCurrentlyFavorite) {
+        // Remove from favorites
+        const response = await fetch(`http://localhost:5000/api/favorites/${provider.id}`, {
+          method: 'DELETE',
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setFavoriteStatuses(prev => ({
+            ...prev,
+            [provider.id]: false
+          }));
+          setFavorites(prev => prev.filter(fav => fav.serviceProvider.id !== provider.id));
+        }
+      } else {
+        // Add to favorites
+        const response = await fetch('http://localhost:5000/api/favorites', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            serviceProviderId: provider.id
+          })
+        });
+
+        const data = await response.json();
+        if (data.success) {
+          setFavoriteStatuses(prev => ({
+            ...prev,
+            [provider.id]: true
+          }));
+          setFavorites(prev => [...prev, data.favorite]);
+        }
+      }
+    } catch (error) {
+      console.error('Error toggling favorite:', error);
+      alert('Error updating favorite status');
     }
   };
 
@@ -363,11 +452,21 @@ const UserDashboard = () => {
                         <i className="bi bi-geo-alt"></i> Show on Map
                       </button>
                       <button 
-                        className="btn btn-sm btn-outline-info"
+                        className="btn btn-sm btn-outline-info me-2"
                         onClick={() => openReviewModal(provider)}
                         title="View Reviews & Comments"
                       >
                         <i className="bi bi-chat-dots"></i>
+                      </button>
+                      <button 
+                        className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'}`}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          toggleFavorite(provider);
+                        }}
+                        title={favoriteStatuses[provider.id] ? 'Remove from Favorites' : 'Add to Favorites'}
+                      >
+                        <i className={`bi ${favoriteStatuses[provider.id] ? 'bi-heart-fill' : 'bi-heart'}`}></i>
                       </button>
                     </div>
                   </div>
@@ -377,6 +476,54 @@ const UserDashboard = () => {
                   <p className="text-muted mb-2">No service providers found</p>
                   <small className="text-muted">
                     Service providers will appear here once they register
+                  </small>
+                </div>
+              )}
+            </div>
+
+            <hr className="my-4" />
+            
+            <h5>My Favorite Providers</h5>
+            <div className="favorites-list">
+              {favorites.length > 0 ? (
+                favorites.map((favorite, index) => (
+                  <div key={index} className="favorite-item">
+                    <div className="favorite-info">
+                      <strong>{favorite.serviceProvider.name}</strong>
+                      <br />
+                      <small className="text-muted">{favorite.serviceProvider.occupation}</small>
+                      <br />
+                      <small className="text-muted">Added: {new Date(favorite.addedAt).toLocaleDateString()}</small>
+                    </div>
+                    <div className="favorite-actions">
+                      <button 
+                        className="btn btn-sm btn-outline-primary me-2"
+                        onClick={() => handleProviderSuggestionClick(favorite.serviceProvider)}
+                      >
+                        <i className="bi bi-geo-alt"></i> Show on Map
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-outline-info me-2"
+                        onClick={() => openReviewModal(favorite.serviceProvider)}
+                        title="View Reviews & Comments"
+                      >
+                        <i className="bi bi-chat-dots"></i>
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-danger"
+                        onClick={() => toggleFavorite(favorite.serviceProvider)}
+                        title="Remove from Favorites"
+                      >
+                        <i className="bi bi-heart-fill"></i>
+                      </button>
+                    </div>
+                  </div>
+                ))
+              ) : (
+                <div className="text-center p-3">
+                  <p className="text-muted mb-2">No favorite providers yet</p>
+                  <small className="text-muted">
+                    Click the heart icon next to any service provider to add them to your favorites
                   </small>
                 </div>
               )}

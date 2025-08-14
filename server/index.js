@@ -5,6 +5,7 @@ require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
 const reviewRoutes = require('./routes/reviews');
+const favoriteRoutes = require('./routes/favorites');
 
 const app = express();
 
@@ -33,6 +34,7 @@ mongoose.connect(mongoUrl, {
 // Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/reviews', reviewRoutes);
+app.use('/api/favorites', favoriteRoutes);
 
 // Basic route
 app.get('/', (req, res) => {
