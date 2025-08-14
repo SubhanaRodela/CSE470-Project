@@ -4,6 +4,7 @@ const cors = require('cors');
 require('dotenv').config();
 
 const authRoutes = require('./routes/auth');
+const reviewRoutes = require('./routes/reviews');
 
 const app = express();
 
@@ -31,6 +32,7 @@ mongoose.connect(mongoUrl, {
 
 // Routes
 app.use('/api/auth', authRoutes);
+app.use('/api/reviews', reviewRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

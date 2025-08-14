@@ -52,4 +52,32 @@
 
 .dashboard-container .card-text {
   color: #7f8c8d;
+}
+
+/* Provider Actions */
+.provider-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.provider-actions .btn {
+  padding: 6px 12px;
+  font-size: 12px;
+  border-radius: 6px;
+}
+
+.provider-actions .btn-outline-info {
+  border-color: #17a2b8;
+  color: #17a2b8;
+}
+
+.provider-actions .btn-outline-info:hover {
+  background-color: #17a2b8;
+  border-color: #17a2b8;
+  color: white;
+}
+
+.me-2 {
+  margin-right: 8px;
 } 

@@ -203,18 +203,29 @@ const searchServiceProviders = async (req, res) => {
 
     // Search for service providers
     const serviceProviders = await User.find(searchQuery)
-      .select('name occupation longitude latitude phone')
+      .select('_id name occupation longitude latitude phone')
       .sort({ name: 1 }); // Sort by name alphabetically
+
+    // Transform _id to id for frontend compatibility
+    const transformedProviders = serviceProviders.map(provider => ({
+      id: provider._id,
+      name: provider.name,
+      occupation: provider.occupation,
+      longitude: provider.longitude,
+      latitude: provider.latitude,
+      phone: provider.phone
+    }));
 
     console.log('=== Service Provider Search Debug ===');
     console.log('Search query:', JSON.stringify(searchQuery, null, 2));
     console.log('Found service providers:', serviceProviders.length);
-    console.log('Service providers:', JSON.stringify(serviceProviders, null, 2));
+    console.log('Original service providers:', JSON.stringify(serviceProviders, null, 2));
+    console.log('Transformed service providers:', JSON.stringify(transformedProviders, null, 2));
     console.log('=====================================');
 
     res.json({
       message: query ? 'Service providers found' : 'All service providers',
-      serviceProviders
+      serviceProviders: transformedProviders
     });
 
   } catch (error) {
@@ -226,14 +237,25 @@ const searchServiceProviders = async (req, res) => {
 // Test endpoint to check all users
 const getAllUsers = async (req, res) => {
   try {
-    const allUsers = await User.find({}).select('name email userType occupation');
+    const allUsers = await User.find({}).select('_id name email userType occupation');
+    
+    // Transform _id to id for frontend compatibility
+    const transformedUsers = allUsers.map(user => ({
+      id: user._id,
+      name: user.name,
+      email: user.email,
+      userType: user.userType,
+      occupation: user.occupation
+    }));
+    
     console.log('All users in database:', allUsers.length);
-    console.log('Users:', JSON.stringify(allUsers, null, 2));
+    console.log('Original users:', JSON.stringify(allUsers, null, 2));
+    console.log('Transformed users:', JSON.stringify(transformedUsers, null, 2));
     
     res.json({
       message: 'All users retrieved',
       totalUsers: allUsers.length,
-      users: allUsers
+      users: transformedUsers
     });
   } catch (error) {
     console.error('Get all users error:', error);

@@ -5,6 +5,7 @@ import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../styles/Dashboard.css';
 import '../styles/Map.css';
+import ReviewModal from '../components/ReviewModal';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -61,6 +62,10 @@ const UserDashboard = () => {
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [allProviders, setAllProviders] = useState([]);
   
+  // Review modal states
+  const [showReviewModal, setShowReviewModal] = useState(false);
+  const [selectedProviderForReview, setSelectedProviderForReview] = useState(null);
+  
   const mapRef = useRef(null);
 
   useEffect(() => {
@@ -94,6 +99,12 @@ const UserDashboard = () => {
       const data = await response.json();
       console.log('Service providers response:', data);
       console.log('Service providers count:', data.serviceProviders?.length || 0);
+      
+      if (data.serviceProviders && data.serviceProviders.length > 0) {
+        console.log('First service provider:', data.serviceProviders[0]);
+        console.log('First service provider ID:', data.serviceProviders[0].id);
+      }
+      
       setAllProviders(data.serviceProviders || []);
       
       // Also test the all-users endpoint
@@ -180,7 +191,7 @@ const UserDashboard = () => {
     setProviderSuggestions([]);
     
     const newMarker = {
-      id: `provider-${provider._id}`,
+      id: `provider-${provider.id}`,
       position: [provider.latitude, provider.longitude],
       name: provider.name,
       type: 'Service Provider',
@@ -201,6 +212,18 @@ const UserDashboard = () => {
     localStorage.removeItem('token');
     localStorage.removeItem('user');
     navigate('/');
+  };
+
+  const openReviewModal = (provider) => {
+    console.log('Opening review modal for provider:', provider);
+    console.log('Provider ID:', provider.id);
+    setSelectedProviderForReview(provider);
+    setShowReviewModal(true);
+  };
+
+  const closeReviewModal = () => {
+    setShowReviewModal(false);
+    setSelectedProviderForReview(null);
   };
 
   if (!user) {
@@ -332,9 +355,21 @@ const UserDashboard = () => {
                       <br />
                       <small className="text-muted">{provider.occupation}</small>
                     </div>
-                    <button className="btn btn-sm btn-outline-primary">
-                      <i className="bi bi-geo-alt"></i> Show on Map
-                    </button>
+                    <div className="provider-actions">
+                      <button 
+                        className="btn btn-sm btn-outline-primary me-2"
+                        onClick={() => handleProviderSuggestionClick(provider)}
+                      >
+                        <i className="bi bi-geo-alt"></i> Show on Map
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-outline-info"
+                        onClick={() => openReviewModal(provider)}
+                        title="View Reviews & Comments"
+                      >
+                        <i className="bi bi-chat-dots"></i>
+                      </button>
+                    </div>
                   </div>
                 ))
               ) : (
@@ -383,6 +418,14 @@ const UserDashboard = () => {
           </div>
         </div>
       </div>
+
+      {/* Review Modal */}
+      <ReviewModal
+        isOpen={showReviewModal}
+        onClose={closeReviewModal}
+        serviceProvider={selectedProviderForReview}
+        user={user}
+      />
     </div>
   );
 };
