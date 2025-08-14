@@ -128,10 +128,59 @@
   animation: heartBeat 0.6s ease-in-out;
 }
 
+/* Enhanced heart button animations */
+.provider-actions .btn-outline-danger,
+.provider-actions .btn-danger {
+  transition: all 0.3s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+.provider-actions .btn-outline-danger:hover,
+.provider-actions .btn-danger:hover {
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(220, 53, 69, 0.3);
+}
+
+.provider-actions .btn-outline-danger:active,
+.provider-actions .btn-danger:active {
+  transform: scale(0.95);
+}
+
+/* Heart icon pulse effect */
+.provider-actions .btn-outline-danger .bi-heart,
+.provider-actions .btn-danger .bi-heart-fill {
+  transition: all 0.2s ease;
+}
+
+.provider-actions .btn-outline-danger:hover .bi-heart,
+.provider-actions .btn-danger:hover .bi-heart-fill {
+  animation: heartBeat 0.6s ease-in-out;
+}
+
 @keyframes heartBeat {
   0% { transform: scale(1); }
+  25% { transform: scale(1.1); }
   50% { transform: scale(1.2); }
+  75% { transform: scale(1.1); }
   100% { transform: scale(1); }
+}
+
+/* Loading state for heart button */
+.heart-loading {
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+.heart-loading .bi-heart,
+.heart-loading .bi-heart-fill {
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
 /* Provider item improvements */
@@ -165,4 +214,77 @@
 .provider-item .btn-danger:hover {
   background-color: #c82333;
   border-color: #bd2130;
+}
+
+/* Notification System */
+.notification {
+  position: fixed;
+  top: 20px;
+  right: 20px;
+  z-index: 9999;
+  max-width: 400px;
+  animation: slideInRight 0.3s ease-out;
+}
+
+.notification-content {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  color: white;
+}
+
+.notification-success {
+  background-color: #28a745;
+}
+
+.notification-error {
+  background-color: #dc3545;
+}
+
+.notification-warning {
+  background-color: #ffc107;
+  color: #212529;
+}
+
+.notification-info {
+  background-color: #17a2b8;
+}
+
+.notification-message {
+  flex: 1;
+  margin-right: 12px;
+}
+
+.notification-close {
+  background: none;
+  border: none;
+  color: inherit;
+  font-size: 18px;
+  cursor: pointer;
+  padding: 0;
+  width: 20px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  transition: background-color 0.2s ease;
+}
+
+.notification-close:hover {
+  background-color: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideInRight {
+  from {
+    transform: translateX(100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
 } 

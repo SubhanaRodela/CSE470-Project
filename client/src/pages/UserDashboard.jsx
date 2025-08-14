@@ -69,6 +69,8 @@ const UserDashboard = () => {
   // Favorite states
   const [favorites, setFavorites] = useState([]);
   const [favoriteStatuses, setFavoriteStatuses] = useState({});
+  const [loadingFavorites, setLoadingFavorites] = useState({});
+  const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   
   const mapRef = useRef(null);
 
@@ -125,27 +127,47 @@ const UserDashboard = () => {
   const loadUserFavorites = async () => {
     try {
       const token = localStorage.getItem('token');
-      if (!token) return;
+      if (!token) {
+        console.log('🔍 No token found, skipping favorites load');
+        return;
+      }
 
+      console.log('🔄 Loading user favorites...');
       const response = await fetch('http://localhost:5000/api/favorites/user', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
+      console.log('🔄 Favorites response status:', response.status);
       const data = await response.json();
+      console.log('🔄 Favorites response data:', data);
+      
       if (data.success) {
-        setFavorites(data.favorites || []);
+        const favoritesList = data.favorites || [];
+        console.log('🔄 Setting favorites:', favoritesList);
+        setFavorites(favoritesList);
         
         // Create a map of favorite statuses for quick lookup
         const statusMap = {};
-        data.favorites.forEach(fav => {
-          statusMap[fav.serviceProvider.id] = true;
+        favoritesList.forEach(fav => {
+          if (fav.serviceProvider && fav.serviceProvider.id) {
+            statusMap[fav.serviceProvider.id] = true;
+          }
         });
+        console.log('🔄 Setting favorite statuses:', statusMap);
         setFavoriteStatuses(statusMap);
+        
+        console.log('✅ Favorites loaded successfully. Count:', favoritesList.length);
+      } else {
+        console.error('❌ Failed to load favorites:', data.message);
+        setFavorites([]);
+        setFavoriteStatuses({});
       }
     } catch (error) {
-      console.error('Error loading favorites:', error);
+      console.error('❌ Error loading favorites:', error);
+      setFavorites([]);
+      setFavoriteStatuses({});
     }
   };
 
@@ -158,10 +180,49 @@ const UserDashboard = () => {
         return;
       }
 
+      // Prevent multiple clicks
+      if (loadingFavorites[provider.id]) {
+        console.log('🔄 Already processing favorite for provider:', provider.name);
+        return;
+      }
+
+      // Set loading state
+      setLoadingFavorites(prev => ({
+        ...prev,
+        [provider.id]: true
+      }));
+
       const isCurrentlyFavorite = favoriteStatuses[provider.id];
+      console.log('🔄 Toggling favorite for provider:', provider.name, 'Current status:', isCurrentlyFavorite);
+      
+      // Optimistically update UI for better UX
+      if (isCurrentlyFavorite) {
+        // Optimistically remove from UI
+        setFavoriteStatuses(prev => ({
+          ...prev,
+          [provider.id]: false
+        }));
+        setFavorites(prev => prev.filter(fav => fav.serviceProvider.id !== provider.id));
+      } else {
+        // Optimistically add to UI
+        setFavoriteStatuses(prev => ({
+          ...prev,
+          [provider.id]: true
+        }));
+        // Create a temporary favorite object for immediate display
+        const tempFavorite = {
+          _id: Date.now(), // temporary ID
+          user: user.id,
+          serviceProvider: provider,
+          createdAt: new Date().toISOString(),
+          addedAt: new Date().toISOString()
+        };
+        setFavorites(prev => [...prev, tempFavorite]);
+      }
       
       if (isCurrentlyFavorite) {
         // Remove from favorites
+        console.log('🗑️ Removing from favorites...');
         const response = await fetch(`http://localhost:5000/api/favorites/${provider.id}`, {
           method: 'DELETE',
           headers: {
@@ -170,15 +231,26 @@ const UserDashboard = () => {
         });
 
         const data = await response.json();
+        console.log('🗑️ Remove response:', data);
+        
         if (data.success) {
+          console.log('✅ Successfully removed from favorites');
+          showNotification(`${provider.name} removed from favorites`, 'success');
+          // State already updated optimistically
+        } else {
+          console.error('❌ Failed to remove from favorites:', data.message);
+          // Revert optimistic update
           setFavoriteStatuses(prev => ({
             ...prev,
-            [provider.id]: false
+            [provider.id]: true
           }));
-          setFavorites(prev => prev.filter(fav => fav.serviceProvider.id !== provider.id));
+          // Reload favorites to get correct state
+          await loadUserFavorites();
+          showNotification(`Failed to remove from favorites: ${data.message}`, 'error');
         }
       } else {
         // Add to favorites
+        console.log('❤️ Adding to favorites...');
         const response = await fetch('http://localhost:5000/api/favorites', {
           method: 'POST',
           headers: {
@@ -191,17 +263,37 @@ const UserDashboard = () => {
         });
 
         const data = await response.json();
+        console.log('❤️ Add response:', data);
+        
         if (data.success) {
+          console.log('✅ Successfully added to favorites');
+          showNotification(`${provider.name} added to favorites`, 'success');
+          // Replace temporary favorite with real one
+          setFavorites(prev => prev.map(fav => 
+            fav._id === Date.now() ? data.favorite : fav
+          ));
+        } else {
+          console.error('❌ Failed to add to favorites:', data.message);
+          // Revert optimistic update
           setFavoriteStatuses(prev => ({
             ...prev,
-            [provider.id]: true
+            [provider.id]: false
           }));
-          setFavorites(prev => [...prev, data.favorite]);
+          setFavorites(prev => prev.filter(fav => fav._id !== Date.now()));
+          showNotification(`Failed to add to favorites: ${data.message}`, 'error');
         }
       }
     } catch (error) {
-      console.error('Error toggling favorite:', error);
-      alert('Error updating favorite status');
+      console.error('❌ Error toggling favorite:', error);
+      // Revert optimistic updates on error
+      await loadUserFavorites();
+      showNotification(`Error updating favorite status: ${error.message}`, 'error');
+    } finally {
+      // Clear loading state
+      setLoadingFavorites(prev => ({
+        ...prev,
+        [provider.id]: false
+      }));
     }
   };
 
@@ -313,6 +405,14 @@ const UserDashboard = () => {
   const closeReviewModal = () => {
     setShowReviewModal(false);
     setSelectedProviderForReview(null);
+  };
+
+  // Show notification
+  const showNotification = (message, type = 'success') => {
+    setNotification({ show: true, message, type });
+    setTimeout(() => {
+      setNotification({ show: false, message: '', type: 'success' });
+    }, 3000);
   };
 
   if (!user) {
@@ -459,14 +559,20 @@ const UserDashboard = () => {
                         <i className="bi bi-chat-dots"></i>
                       </button>
                       <button 
-                        className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'}`}
+                        className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'} ${loadingFavorites[provider.id] ? 'heart-loading' : ''}`}
                         onClick={(e) => {
                           e.stopPropagation();
                           toggleFavorite(provider);
                         }}
                         title={favoriteStatuses[provider.id] ? 'Remove from Favorites' : 'Add to Favorites'}
+                        disabled={loadingFavorites[provider.id]}
+                        style={{
+                          transition: 'all 0.2s ease-in-out',
+                          transform: favoriteStatuses[provider.id] ? 'scale(1.1)' : 'scale(1)'
+                        }}
                       >
                         <i className={`bi ${favoriteStatuses[provider.id] ? 'bi-heart-fill' : 'bi-heart'}`}></i>
+                        {loadingFavorites[provider.id] ? ' ⏳' : favoriteStatuses[provider.id] ? ' ❤️' : ' 🤍'}
                       </button>
                     </div>
                   </div>
@@ -483,17 +589,26 @@ const UserDashboard = () => {
 
             <hr className="my-4" />
             
-            <h5>My Favorite Providers</h5>
+            <div className="d-flex justify-content-between align-items-center mb-3">
+              <h5 className="mb-0">My Favorite Providers</h5>
+              <button 
+                className="btn btn-sm btn-outline-secondary"
+                onClick={loadUserFavorites}
+                title="Refresh Favorites"
+              >
+                <i className="bi bi-arrow-clockwise"></i>
+              </button>
+            </div>
             <div className="favorites-list">
               {favorites.length > 0 ? (
                 favorites.map((favorite, index) => (
-                  <div key={index} className="favorite-item">
+                  <div key={favorite._id || index} className="favorite-item">
                     <div className="favorite-info">
                       <strong>{favorite.serviceProvider.name}</strong>
                       <br />
                       <small className="text-muted">{favorite.serviceProvider.occupation}</small>
                       <br />
-                      <small className="text-muted">Added: {new Date(favorite.addedAt).toLocaleDateString()}</small>
+                      <small className="text-muted">Added: {new Date(favorite.addedAt || favorite.createdAt).toLocaleDateString()}</small>
                     </div>
                     <div className="favorite-actions">
                       <button 
@@ -573,6 +688,21 @@ const UserDashboard = () => {
         serviceProvider={selectedProviderForReview}
         user={user}
       />
+
+      {/* Notification */}
+      {notification.show && (
+        <div className={`notification notification-${notification.type}`}>
+          <div className="notification-content">
+            <span className="notification-message">{notification.message}</span>
+            <button 
+              className="notification-close"
+              onClick={() => setNotification({ show: false, message: '', type: 'success' })}
+            >
+              ×
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
