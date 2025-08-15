@@ -13,6 +13,7 @@ import ServiceProviderDashboard from './pages/ServiceProviderDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Profile from './pages/Profile';
 import Chatbox from './pages/chatbox';
+import ShowProfile from './pages/showProfile';
 
 function App() {
   return (
@@ -49,6 +50,7 @@ function App() {
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/chatbox" element={<Chatbox />} />
+          <Route path="/show-profile" element={<ShowProfile />} />
         </Routes>
       </div>
     </Router>

@@ -504,12 +504,52 @@ const UserDashboard = () => {
                     <div
                       key={index}
                       className="suggestion-item"
-                      onClick={() => handleProviderSuggestionClick(provider)}
                     >
-                      <div>
+                      <div 
+                        className="suggestion-info"
+                        onClick={() => {
+                          handleProviderSuggestionClick(provider);
+                          setShowProviderSuggestions(false);
+                        }}
+                      >
                         <strong>{provider.name}</strong>
                         <br />
                         <small className="text-muted">{provider.occupation}</small>
+                      </div>
+                      <div className="suggestion-actions">
+                        <button 
+                          className="btn btn-sm btn-outline-secondary me-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate('/show-profile', { state: { provider } });
+                            setShowProviderSuggestions(false);
+                          }}
+                          title="View Profile"
+                        >
+                          <i className="bi bi-person"></i>
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-outline-primary me-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            handleProviderSuggestionClick(provider);
+                            setShowProviderSuggestions(false);
+                          }}
+                          title="Show on Map"
+                        >
+                          <i className="bi bi-geo-alt"></i>
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-outline-success"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            navigate(`/chatbox?providerId=${provider.id}`);
+                            setShowProviderSuggestions(false);
+                          }}
+                          title="Send Message"
+                        >
+                          <i className="bi bi-envelope"></i>
+                        </button>
                       </div>
                     </div>
                   ))}
@@ -519,7 +559,16 @@ const UserDashboard = () => {
             
             {selectedProvider && (
               <div className="selected-location">
-                <h5>Selected Service Provider:</h5>
+                <div className="d-flex justify-content-between align-items-start mb-2">
+                  <h5 className="mb-0">Selected Service Provider:</h5>
+                  <button 
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={() => navigate('/show-profile', { state: { provider: selectedProvider } })}
+                    title="View Profile"
+                  >
+                    <i className="bi bi-person"></i> View Profile
+                  </button>
+                </div>
                 <p className="mb-1"><strong>{selectedProvider.name}</strong></p>
                 <p className="text-muted small mb-1">
                   Occupation: {selectedProvider.occupation}
@@ -547,6 +596,16 @@ const UserDashboard = () => {
                       <small className="text-muted">{provider.occupation}</small>
                     </div>
                     <div className="provider-actions">
+                      <button 
+                        className="btn btn-sm btn-outline-secondary me-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/show-profile', { state: { provider } });
+                        }}
+                        title="View Profile"
+                      >
+                        <i className="bi bi-person"></i>
+                      </button>
                       <button 
                         className="btn btn-sm btn-outline-primary me-2"
                         onClick={() => handleProviderSuggestionClick(provider)}
@@ -623,6 +682,16 @@ const UserDashboard = () => {
                       <small className="text-muted">Added: {new Date(favorite.addedAt || favorite.createdAt).toLocaleDateString()}</small>
                     </div>
                     <div className="favorite-actions">
+                      <button 
+                        className="btn btn-sm btn-outline-secondary me-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate('/show-profile', { state: { provider: favorite.serviceProvider } });
+                        }}
+                        title="View Profile"
+                      >
+                        <i className="bi bi-person"></i>
+                      </button>
                       <button 
                         className="btn btn-sm btn-outline-primary me-2"
                         onClick={() => handleProviderSuggestionClick(favorite.serviceProvider)}
