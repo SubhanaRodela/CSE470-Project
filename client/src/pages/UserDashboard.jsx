@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import '../styles/Dashboard.css';
 import '../styles/Map.css';
 import ReviewModal from '../components/ReviewModal';
+import MessageNotification from '../components/MessageNotification';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -428,6 +429,7 @@ const UserDashboard = () => {
               <div className="container-fluid">
                 <span className="navbar-brand">Rodela</span>
                 <div className="navbar-nav ms-auto">
+                  <MessageNotification userType={user?.userType} />
                   <button 
                     className="btn btn-outline-light me-2"
                     onClick={() => navigate('/profile')}
@@ -557,6 +559,16 @@ const UserDashboard = () => {
                         title="View Reviews & Comments"
                       >
                         <i className="bi bi-chat-dots"></i>
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-outline-success me-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/chatbox?providerId=${provider.id}`);
+                        }}
+                        title="Send Message"
+                      >
+                        <i className="bi bi-envelope"></i>
                       </button>
                       <button 
                         className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'} ${loadingFavorites[provider.id] ? 'heart-loading' : ''}`}

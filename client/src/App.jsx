@@ -12,6 +12,7 @@ import UserDashboard from './pages/UserDashboard';
 import ServiceProviderDashboard from './pages/ServiceProviderDashboard';
 import AdminDashboard from './pages/AdminDashboard';
 import Profile from './pages/Profile';
+import Chatbox from './pages/chatbox';
 
 function App() {
   return (
@@ -47,6 +48,7 @@ function App() {
           <Route path="/service-provider-dashboard" element={<ServiceProviderDashboard />} />
           <Route path="/admin-dashboard" element={<AdminDashboard />} />
           <Route path="/profile" element={<Profile />} />
+          <Route path="/chatbox" element={<Chatbox />} />
         </Routes>
       </div>
     </Router>

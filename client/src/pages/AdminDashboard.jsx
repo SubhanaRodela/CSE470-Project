@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import MessageNotification from '../components/MessageNotification';
 import '../styles/Dashboard.css';
 
 const AdminDashboard = () => {
@@ -43,6 +44,7 @@ const AdminDashboard = () => {
               <div className="container-fluid">
                 <span className="navbar-brand">Rodela - Admin Panel</span>
                 <div className="navbar-nav ms-auto">
+                  <MessageNotification userType={user?.userType} />
                   <button 
                     className="btn btn-outline-light"
                     onClick={handleLogout}

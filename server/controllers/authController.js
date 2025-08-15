@@ -263,10 +263,54 @@ const getAllUsers = async (req, res) => {
   }
 };
 
+// Get user by ID
+const getUserById = async (req, res) => {
+  try {
+    const { userId } = req.params;
+    
+    if (!userId) {
+      return res.status(400).json({ 
+        success: false, 
+        message: 'User ID is required' 
+      });
+    }
+
+    const user = await User.findById(userId).select('_id name email userType occupation phone');
+    
+    if (!user) {
+      return res.status(404).json({ 
+        success: false, 
+        message: 'User not found' 
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'User retrieved successfully',
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        userType: user.userType,
+        occupation: user.occupation,
+        phone: user.phone
+      }
+    });
+
+  } catch (error) {
+    console.error('Get user by ID error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while retrieving user' 
+    });
+  }
+};
+
 module.exports = {
   register,
   login,
   updateProfile,
   searchServiceProviders,
-  getAllUsers
+  getAllUsers,
+  getUserById
 }; 
