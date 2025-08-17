@@ -7,6 +7,7 @@ import '../styles/Dashboard.css';
 import '../styles/Map.css';
 import ReviewModal from '../components/ReviewModal';
 import MessageNotification from '../components/MessageNotification';
+import ProfileCard from '../components/ProfileCard';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -67,13 +68,30 @@ const UserDashboard = () => {
   const [showReviewModal, setShowReviewModal] = useState(false);
   const [selectedProviderForReview, setSelectedProviderForReview] = useState(null);
   
+  // Profile card states
+  const [showProfileCard, setShowProfileCard] = useState(false);
+  const [selectedProviderForProfile, setSelectedProviderForProfile] = useState(null);
+  
   // Favorite states
   const [favorites, setFavorites] = useState([]);
   const [favoriteStatuses, setFavoriteStatuses] = useState({});
   const [loadingFavorites, setLoadingFavorites] = useState({});
   const [notification, setNotification] = useState({ show: false, message: '', type: 'success' });
   
+  // Sidebar resize states
+  const [sidebarWidth, setSidebarWidth] = useState(() => {
+    const saved = localStorage.getItem('sidebarWidth');
+    return saved ? parseFloat(saved) : 20;
+  }); // percentage
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    const saved = localStorage.getItem('sidebarCollapsed');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [isResizing, setIsResizing] = useState(false);
+  
   const mapRef = useRef(null);
+  const sidebarRef = useRef(null);
+  const resizeHandleRef = useRef(null);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -408,6 +426,103 @@ const UserDashboard = () => {
     setSelectedProviderForReview(null);
   };
 
+  // Profile card functions
+  const openProfileCard = (provider) => {
+    setSelectedProviderForProfile(provider);
+    setShowProfileCard(true);
+  };
+
+  const closeProfileCard = () => {
+    setShowProfileCard(false);
+    setSelectedProviderForProfile(null);
+  };
+
+  const handleProfileCardShowOnMap = () => {
+    if (selectedProviderForProfile) {
+      handleProviderSuggestionClick(selectedProviderForProfile);
+      closeProfileCard();
+    }
+  };
+
+  const handleProfileCardOpenReviews = () => {
+    if (selectedProviderForProfile) {
+      openReviewModal(selectedProviderForProfile);
+      closeProfileCard();
+    }
+  };
+
+  const handleProfileCardSendMessage = () => {
+    if (selectedProviderForProfile) {
+      navigate(`/chatbox?providerId=${selectedProviderForProfile.id}`);
+      closeProfileCard();
+    }
+  };
+
+  // Sidebar resize functionality
+  const handleResizeStart = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    document.body.style.cursor = 'col-resize';
+    document.body.style.userSelect = 'none';
+  };
+
+  const handleResizeMove = (e) => {
+    if (!isResizing) return;
+    
+    const containerWidth = window.innerWidth;
+    const newWidth = (e.clientX / containerWidth) * 100;
+    
+    // Constrain width between 15% and 50%
+    const constrainedWidth = Math.max(15, Math.min(50, newWidth));
+    setSidebarWidth(constrainedWidth);
+    localStorage.setItem('sidebarWidth', constrainedWidth.toString());
+  };
+
+  const handleResizeEnd = () => {
+    setIsResizing(false);
+    document.body.style.cursor = '';
+    document.body.style.userSelect = '';
+  };
+
+  const toggleSidebar = () => {
+    const newCollapsedState = !isSidebarCollapsed;
+    setIsSidebarCollapsed(newCollapsedState);
+    localStorage.setItem('sidebarCollapsed', JSON.stringify(newCollapsedState));
+  };
+
+  // Add resize event listeners
+  useEffect(() => {
+    if (isResizing) {
+      document.addEventListener('mousemove', handleResizeMove);
+      document.addEventListener('mouseup', handleResizeEnd);
+      
+      return () => {
+        document.removeEventListener('mousemove', handleResizeMove);
+        document.removeEventListener('mouseup', handleResizeEnd);
+      };
+    }
+  }, [isResizing]);
+
+  // Add keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+        e.preventDefault();
+        toggleSidebar();
+      }
+      
+      // Close profile card with Escape key
+      if (e.key === 'Escape' && showProfileCard) {
+        closeProfileCard();
+      }
+    };
+
+    document.addEventListener('keydown', handleKeyDown);
+    return () => {
+      document.removeEventListener('keydown', handleKeyDown);
+    };
+  }, [isSidebarCollapsed, showProfileCard]);
+
   // Show notification
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -450,7 +565,29 @@ const UserDashboard = () => {
 
         <div className="map-container">
           {/* Sidebar */}
-          <div className="sidebar">
+          <div 
+            className={`sidebar ${isSidebarCollapsed ? 'collapsed' : ''} ${isResizing ? 'resizing' : ''}`}
+            ref={sidebarRef}
+            style={{ width: isSidebarCollapsed ? '50px' : `${sidebarWidth}%` }}
+          >
+            {/* Resize Handle */}
+            <div 
+              className={`sidebar-resize-handle ${isResizing ? 'resizing' : ''}`}
+              ref={resizeHandleRef}
+              onMouseDown={handleResizeStart}
+            />
+            
+            {/* Toggle Button */}
+            <button 
+              className="sidebar-toggle"
+              onClick={toggleSidebar}
+              title={`${isSidebarCollapsed ? 'Expand' : 'Collapse'} Sidebar (Ctrl+B)`}
+            >
+              <i className={`bi bi-chevron-${isSidebarCollapsed ? 'right' : 'left'}`}></i>
+            </button>
+            
+            {/* Sidebar Content */}
+            <div className="sidebar-content">
             <h3>Location Search</h3>
             <div className="search-container">
               <input
@@ -521,7 +658,7 @@ const UserDashboard = () => {
                           className="btn btn-sm btn-outline-secondary me-1"
                           onClick={(e) => {
                             e.stopPropagation();
-                            navigate('/show-profile', { state: { provider } });
+                            openProfileCard(provider);
                             setShowProviderSuggestions(false);
                           }}
                           title="View Profile"
@@ -563,7 +700,7 @@ const UserDashboard = () => {
                   <h5 className="mb-0">Selected Service Provider:</h5>
                   <button 
                     className="btn btn-sm btn-outline-secondary"
-                    onClick={() => navigate('/show-profile', { state: { provider: selectedProvider } })}
+                    onClick={() => openProfileCard(selectedProvider)}
                     title="View Profile"
                   >
                     <i className="bi bi-person"></i> View Profile
@@ -600,7 +737,7 @@ const UserDashboard = () => {
                         className="btn btn-sm btn-outline-secondary me-2"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate('/show-profile', { state: { provider } });
+                          openProfileCard(provider);
                         }}
                         title="View Profile"
                       >
@@ -686,7 +823,7 @@ const UserDashboard = () => {
                         className="btn btn-sm btn-outline-secondary me-2"
                         onClick={(e) => {
                           e.stopPropagation();
-                          navigate('/show-profile', { state: { provider: favorite.serviceProvider } });
+                          openProfileCard(favorite.serviceProvider);
                         }}
                         title="View Profile"
                       >
@@ -724,10 +861,14 @@ const UserDashboard = () => {
                 </div>
               )}
             </div>
-          </div>
+          </div> {/* End sidebar-content */}
+          </div> {/* End sidebar */}
 
           {/* Map Area */}
-          <div className="map-area">
+          <div 
+            className="map-area"
+            style={{ width: isSidebarCollapsed ? 'calc(100% - 50px)' : `calc(100% - ${sidebarWidth}%)` }}
+          >
             <MapContainer
               center={[51.505, -0.09]}
               zoom={13}
@@ -768,6 +909,16 @@ const UserDashboard = () => {
         onClose={closeReviewModal}
         serviceProvider={selectedProviderForReview}
         user={user}
+      />
+
+      {/* Profile Card */}
+      <ProfileCard
+        provider={selectedProviderForProfile}
+        isOpen={showProfileCard}
+        onClose={closeProfileCard}
+        onShowOnMap={handleProfileCardShowOnMap}
+        onOpenReviews={handleProfileCardOpenReviews}
+        onSendMessage={handleProfileCardSendMessage}
       />
 
       {/* Notification */}
