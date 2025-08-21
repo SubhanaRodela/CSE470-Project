@@ -7,6 +7,7 @@ const authRoutes = require('./routes/auth');
 const reviewRoutes = require('./routes/reviews');
 const favoriteRoutes = require('./routes/favorites');
 const chatRoutes = require('./routes/chat');
+const bookingRoutes = require('./routes/bookings');
 
 const app = express();
 
@@ -37,6 +38,7 @@ app.use('/api/auth', authRoutes);
 app.use('/api/reviews', reviewRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/chat', chatRoutes);
+app.use('/api/bookings', bookingRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

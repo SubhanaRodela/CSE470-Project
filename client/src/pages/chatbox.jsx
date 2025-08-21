@@ -17,6 +17,16 @@ const Chatbox = () => {
   
   const messagesEndRef = useRef(null);
   const inputRef = useRef(null);
+  
+  // Real-time chat polling
+  const [lastMessageTimestamp, setLastMessageTimestamp] = useState(null);
+  const [isPolling, setIsPolling] = useState(false);
+  const pollingIntervalRef = useRef(null);
+  const [newMessageCount, setNewMessageCount] = useState(0);
+  const [showNewMessageIndicator, setShowNewMessageIndicator] = useState(false);
+  const [isTyping, setIsTyping] = useState(false);
+  const [otherUserTyping, setOtherUserTyping] = useState(false);
+  const [audioEnabled, setAudioEnabled] = useState(true);
 
   // Get provider ID or sender ID from URL params if navigating from provider list or message notification
   const providerId = searchParams.get('providerId');
@@ -67,8 +77,140 @@ const Chatbox = () => {
     scrollToBottom();
   }, [messages]);
 
+  // Start/stop real-time message polling
+  useEffect(() => {
+    if (selectedConversation && !isPolling) {
+      startMessagePolling();
+    } else if (!selectedConversation && isPolling) {
+      stopMessagePolling();
+    }
+
+    return () => {
+      stopMessagePolling();
+    };
+  }, [selectedConversation, isPolling]);
+
+  // Cleanup polling on component unmount
+  useEffect(() => {
+    return () => {
+      stopMessagePolling();
+    };
+  }, []);
+
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  };
+
+  // Start real-time message polling
+  const startMessagePolling = () => {
+    if (pollingIntervalRef.current) return;
+    
+    setIsPolling(true);
+    pollingIntervalRef.current = setInterval(async () => {
+      if (selectedConversation) {
+        await pollForNewMessages();
+      }
+    }, 3000); // Poll every 3 seconds
+  };
+
+  // Stop real-time message polling
+  const stopMessagePolling = () => {
+    if (pollingIntervalRef.current) {
+      clearInterval(pollingIntervalRef.current);
+      pollingIntervalRef.current = null;
+    }
+    setIsPolling(false);
+  };
+
+  // Mark messages as read
+  const markMessagesAsRead = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token || !selectedConversation) return;
+
+      await fetch(`http://localhost:5000/api/chat/conversation/${selectedConversation.otherUser.id}/mark-read`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+    } catch (error) {
+      // Silently handle errors
+    }
+  };
+
+  // Play notification sound
+  const playNotificationSound = () => {
+    if (!audioEnabled) return;
+    
+    try {
+      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
+      audio.volume = 0.3;
+      audio.play().catch(() => {
+        // Ignore audio play errors
+      });
+    } catch (error) {
+      // Ignore audio errors
+    }
+  };
+
+  // Poll for new messages without visual interruption
+  const pollForNewMessages = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      if (!token || !selectedConversation) return;
+
+      const response = await fetch(`http://localhost:5000/api/chat/conversation/${selectedConversation.otherUser.id}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`
+        }
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        const newMessages = data.data.messages || [];
+        
+        // Check if there are new messages
+        if (newMessages.length > messages.length) {
+          const newMessageCount = newMessages.length - messages.length;
+          
+          // Show new message indicator briefly
+          setNewMessageCount(newMessageCount);
+          setShowNewMessageIndicator(true);
+          
+          // Play notification sound
+          playNotificationSound();
+          
+          // Hide indicator after 2 seconds
+          setTimeout(() => {
+            setShowNewMessageIndicator(false);
+            setNewMessageCount(0);
+          }, 2000);
+          
+                  // Update messages
+        setMessages(newMessages);
+        
+        // Mark new messages as read
+        await markMessagesAsRead();
+        
+        // Highlight new messages briefly
+        const newMessageElements = document.querySelectorAll('.message.received');
+        newMessageElements.forEach((element, index) => {
+          if (index >= messages.length) {
+            element.classList.add('new-message-highlight');
+            setTimeout(() => {
+              element.classList.remove('new-message-highlight');
+            }, 3000);
+          }
+        });
+        
+        // Update conversations list to reflect new messages
+        await loadConversations();
+        }
+      }
+    } catch (error) {
+      // Silently handle errors to avoid disrupting user experience
+    }
   };
 
   const loadConversations = async () => {
@@ -180,7 +322,14 @@ const Chatbox = () => {
 
       if (response.ok) {
         const data = await response.json();
-        setMessages(data.data.messages || []);
+        const newMessages = data.data.messages || [];
+        setMessages(newMessages);
+        
+        // Set last message timestamp for polling
+        if (newMessages.length > 0) {
+          const lastMessage = newMessages[newMessages.length - 1];
+          setLastMessageTimestamp(lastMessage.createdAt);
+        }
         
         // Update conversation with real data
         if (data.data.conversationId !== 'temp') {
@@ -227,11 +376,11 @@ const Chatbox = () => {
         const data = await response.json();
         console.log('Message sent successfully:', data);
         
-        // Add new message to the list
+        // Add new message to the list immediately for instant feedback
         const messageObj = {
           _id: data.data._id,
           content: newMessage.trim(),
-          sender: user.id, // The server sends 'id' in the user object
+          sender: { _id: user.id, name: user.name, userType: user.userType },
           receiver: selectedConversation.otherUser.id,
           createdAt: new Date(),
           isRead: false
@@ -240,6 +389,9 @@ const Chatbox = () => {
         console.log('Created message object:', messageObj);
         setMessages(prev => [...prev, messageObj]);
         setNewMessage('');
+        
+        // Update last message timestamp
+        setLastMessageTimestamp(messageObj.createdAt);
         
         // Update conversations list
         await loadConversations();
@@ -374,11 +526,35 @@ const Chatbox = () => {
                 <div>
                   <h4>{selectedConversation.otherUser.name}</h4>
                   <small>{selectedConversation.otherUser.userType}</small>
+                  <div className="online-indicator">
+                    <span className="online-dot"></span>
+                    <span className="online-text">online</span>
+                    <span className="last-seen">last seen just now</span>
+                  </div>
                 </div>
+                                  <button
+                    className={`audio-toggle ${audioEnabled ? 'enabled' : 'disabled'}`}
+                    onClick={() => setAudioEnabled(!audioEnabled)}
+                    title={audioEnabled ? 'Disable sound notifications' : 'Enable sound notifications'}
+                  >
+                    <i className={`bi ${audioEnabled ? 'bi-volume-up' : 'bi-volume-mute'}`}></i>
+                  </button>
+                  <div className="connection-status">
+                    <span className="status-dot connected"></span>
+                    <span className="status-text">connected</span>
+                  </div>
               </div>
             </div>
 
             <div className="messages-container">
+              {/* New Message Indicator */}
+              {showNewMessageIndicator && (
+                <div className="new-message-indicator">
+                  <i className="bi bi-arrow-down"></i>
+                  <span>{newMessageCount} new message{newMessageCount > 1 ? 's' : ''}</span>
+                </div>
+              )}
+              
               {messages.length > 0 ? (
                 messages.map((message) => {
                                     console.log('Message debug:', {
@@ -391,13 +567,20 @@ const Chatbox = () => {
                   return (
                     <div
                       key={message._id}
-                      className={`message ${message.sender._id === user.id ? 'sent' : 'received'}`}
+                      className={`message ${message.sender._id === user.id ? 'sent' : 'received'} ${message._id === 'temp' ? 'sending' : ''}`}
                     >
                       <div className="message-content">
                         <p>{message.content}</p>
-                        <span className="message-time">
-                          {formatTime(message.createdAt)}
-                        </span>
+                        <div className="message-footer">
+                          <span className="message-time">
+                            {formatTime(message.createdAt)}
+                          </span>
+                          {message.sender._id === user.id && (
+                            <span className="message-status">
+                              <i className="bi bi-check2-all"></i>
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
@@ -406,6 +589,17 @@ const Chatbox = () => {
                 <div className="no-messages">
                   <i className="bi bi-chat-dots"></i>
                   <p>No messages yet. Start the conversation!</p>
+                </div>
+              )}
+              {/* Typing Indicator */}
+              {otherUserTyping && (
+                <div className="typing-indicator">
+                  <div className="typing-dots">
+                    <span></span>
+                    <span></span>
+                    <span></span>
+                  </div>
+                  <span className="typing-text">typing...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -418,7 +612,19 @@ const Chatbox = () => {
                   type="text"
                   placeholder="Type your message..."
                   value={newMessage}
-                  onChange={(e) => setNewMessage(e.target.value)}
+                  onChange={(e) => {
+                    setNewMessage(e.target.value);
+                    if (e.target.value.trim()) {
+                      setIsTyping(true);
+                      // Simulate typing indicator for other user
+                      setTimeout(() => setOtherUserTyping(true), 1000);
+                      setTimeout(() => setOtherUserTyping(false), 3000);
+                    } else {
+                      setIsTyping(false);
+                    }
+                  }}
+                  onFocus={() => setIsTyping(true)}
+                  onBlur={() => setIsTyping(false)}
                   className="message-input"
                   disabled={sending}
                 />

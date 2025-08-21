@@ -8,6 +8,7 @@ import '../styles/Map.css';
 import ReviewModal from '../components/ReviewModal';
 import MessageNotification from '../components/MessageNotification';
 import ProfileCard from '../components/ProfileCard';
+import BookingModal from '../components/BookingModal';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -72,6 +73,10 @@ const UserDashboard = () => {
   const [showProfileCard, setShowProfileCard] = useState(false);
   const [selectedProviderForProfile, setSelectedProviderForProfile] = useState(null);
   
+  // Booking modal states
+  const [showBookingModal, setShowBookingModal] = useState(false);
+  const [selectedProviderForBooking, setSelectedProviderForBooking] = useState(null);
+  
   // Favorite states
   const [favorites, setFavorites] = useState([]);
   const [favoriteStatuses, setFavoriteStatuses] = useState({});
@@ -118,25 +123,16 @@ const UserDashboard = () => {
   // Load all service providers
   const loadAllServiceProviders = async () => {
     try {
-      console.log('Loading all service providers...');
       const response = await fetch(
         'http://localhost:5000/api/auth/search-service-providers'
       );
       const data = await response.json();
-      console.log('Service providers response:', data);
-      console.log('Service providers count:', data.serviceProviders?.length || 0);
-      
-      if (data.serviceProviders && data.serviceProviders.length > 0) {
-        console.log('First service provider:', data.serviceProviders[0]);
-        console.log('First service provider ID:', data.serviceProviders[0].id);
-      }
       
       setAllProviders(data.serviceProviders || []);
       
       // Also test the all-users endpoint
       const allUsersResponse = await fetch('http://localhost:5000/api/auth/all-users');
       const allUsersData = await allUsersResponse.json();
-      console.log('All users in database:', allUsersData);
     } catch (error) {
       console.error('Error loading service providers:', error);
     }
@@ -147,24 +143,19 @@ const UserDashboard = () => {
     try {
       const token = localStorage.getItem('token');
       if (!token) {
-        console.log('🔍 No token found, skipping favorites load');
         return;
       }
 
-      console.log('🔄 Loading user favorites...');
       const response = await fetch('http://localhost:5000/api/favorites/user', {
         headers: {
           'Authorization': `Bearer ${token}`
         }
       });
 
-      console.log('🔄 Favorites response status:', response.status);
       const data = await response.json();
-      console.log('🔄 Favorites response data:', data);
       
       if (data.success) {
         const favoritesList = data.favorites || [];
-        console.log('🔄 Setting favorites:', favoritesList);
         setFavorites(favoritesList);
         
         // Create a map of favorite statuses for quick lookup
@@ -174,10 +165,7 @@ const UserDashboard = () => {
             statusMap[fav.serviceProvider.id] = true;
           }
         });
-        console.log('🔄 Setting favorite statuses:', statusMap);
         setFavoriteStatuses(statusMap);
-        
-        console.log('✅ Favorites loaded successfully. Count:', favoritesList.length);
       } else {
         console.error('❌ Failed to load favorites:', data.message);
         setFavorites([]);
@@ -201,7 +189,6 @@ const UserDashboard = () => {
 
       // Prevent multiple clicks
       if (loadingFavorites[provider.id]) {
-        console.log('🔄 Already processing favorite for provider:', provider.name);
         return;
       }
 
@@ -212,7 +199,6 @@ const UserDashboard = () => {
       }));
 
       const isCurrentlyFavorite = favoriteStatuses[provider.id];
-      console.log('🔄 Toggling favorite for provider:', provider.name, 'Current status:', isCurrentlyFavorite);
       
       // Optimistically update UI for better UX
       if (isCurrentlyFavorite) {
@@ -241,7 +227,6 @@ const UserDashboard = () => {
       
       if (isCurrentlyFavorite) {
         // Remove from favorites
-        console.log('🗑️ Removing from favorites...');
         const response = await fetch(`http://localhost:5000/api/favorites/${provider.id}`, {
           method: 'DELETE',
           headers: {
@@ -250,10 +235,9 @@ const UserDashboard = () => {
         });
 
         const data = await response.json();
-        console.log('🗑️ Remove response:', data);
+
         
         if (data.success) {
-          console.log('✅ Successfully removed from favorites');
           showNotification(`${provider.name} removed from favorites`, 'success');
           // State already updated optimistically
         } else {
@@ -269,7 +253,6 @@ const UserDashboard = () => {
         }
       } else {
         // Add to favorites
-        console.log('❤️ Adding to favorites...');
         const response = await fetch('http://localhost:5000/api/favorites', {
           method: 'POST',
           headers: {
@@ -282,10 +265,8 @@ const UserDashboard = () => {
         });
 
         const data = await response.json();
-        console.log('❤️ Add response:', data);
         
         if (data.success) {
-          console.log('✅ Successfully added to favorites');
           showNotification(`${provider.name} added to favorites`, 'success');
           // Replace temporary favorite with real one
           setFavorites(prev => prev.map(fav => 
@@ -415,8 +396,6 @@ const UserDashboard = () => {
   };
 
   const openReviewModal = (provider) => {
-    console.log('Opening review modal for provider:', provider);
-    console.log('Provider ID:', provider.id);
     setSelectedProviderForReview(provider);
     setShowReviewModal(true);
   };
@@ -424,6 +403,21 @@ const UserDashboard = () => {
   const closeReviewModal = () => {
     setShowReviewModal(false);
     setSelectedProviderForReview(null);
+  };
+
+  // Booking modal functions
+  const openBookingModal = (provider) => {
+    setSelectedProviderForBooking(provider);
+    setShowBookingModal(true);
+  };
+
+  const closeBookingModal = () => {
+    setShowBookingModal(false);
+    setSelectedProviderForBooking(null);
+  };
+
+  const handleBookingSuccess = (booking) => {
+    showNotification(`Booking created successfully for ${booking.serviceProvider.name}!`, 'success');
   };
 
   // Profile card functions
@@ -766,6 +760,7 @@ const UserDashboard = () => {
                       >
                         <i className="bi bi-envelope"></i>
                       </button>
+
                       <button 
                         className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'} ${loadingFavorites[provider.id] ? 'heart-loading' : ''}`}
                         onClick={(e) => {
@@ -842,6 +837,7 @@ const UserDashboard = () => {
                       >
                         <i className="bi bi-chat-dots"></i>
                       </button>
+
                       <button 
                         className="btn btn-sm btn-danger"
                         onClick={() => toggleFavorite(favorite.serviceProvider)}
@@ -919,6 +915,20 @@ const UserDashboard = () => {
         onShowOnMap={handleProfileCardShowOnMap}
         onOpenReviews={handleProfileCardOpenReviews}
         onSendMessage={handleProfileCardSendMessage}
+        onBookNow={() => {
+          if (selectedProviderForProfile) {
+            openBookingModal(selectedProviderForProfile);
+            closeProfileCard();
+          }
+        }}
+      />
+
+      {/* Booking Modal */}
+      <BookingModal
+        isOpen={showBookingModal}
+        onClose={closeBookingModal}
+        serviceProvider={selectedProviderForBooking}
+        onBookingSuccess={handleBookingSuccess}
       />
 
       {/* Notification */}

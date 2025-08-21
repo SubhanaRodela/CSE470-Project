@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import '../styles/ProfileCard.css';
 
-const ProfileCard = ({ provider, isOpen, onClose, onShowOnMap, onOpenReviews, onSendMessage }) => {
+const ProfileCard = ({ provider, isOpen, onClose, onShowOnMap, onOpenReviews, onSendMessage, onBookNow }) => {
   const [reviews, setReviews] = useState([]);
   const [averageRating, setAverageRating] = useState(0);
   const [totalReviews, setTotalReviews] = useState(0);
@@ -170,6 +170,9 @@ const ProfileCard = ({ provider, isOpen, onClose, onShowOnMap, onOpenReviews, on
 
         {/* Action Buttons */}
         <div className="profile-card-actions">
+          <button className="btn btn-warning" onClick={onBookNow}>
+            <i className="bi bi-calendar-check"></i> Book Now
+          </button>
           <button className="btn btn-primary" onClick={onSendMessage}>
             <i className="bi bi-envelope"></i> Send Message
           </button>
