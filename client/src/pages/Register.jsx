@@ -12,6 +12,9 @@ const Register = () => {
     phone: '',
     userType: '',
     occupation: '',
+    longitude: '',
+    latitude: '',
+    charge: '',
     password: '',
     confirmPassword: ''
   });
@@ -42,12 +45,13 @@ const Register = () => {
       [name]: value
     });
 
-    // Clear occupation when user type changes to non-service provider
+    // Clear occupation and charge when user type changes to non-service provider
     if (name === 'userType' && value !== 'service provider') {
       setFormData(prev => ({
         ...prev,
         [name]: value,
-        occupation: ''
+        occupation: '',
+        charge: ''
       }));
     }
 
@@ -78,10 +82,24 @@ const Register = () => {
       return;
     }
 
-    if (formData.userType === 'service provider' && !formData.occupation) {
-      toast.error('Please select an occupation for service provider');
+    // Validate location coordinates for all users
+    if (!formData.longitude || !formData.latitude) {
+      toast.error('Please enter your location coordinates');
       setLoading(false);
       return;
+    }
+
+    if (formData.userType === 'service provider') {
+      if (!formData.occupation) {
+        toast.error('Please select an occupation for service provider');
+        setLoading(false);
+        return;
+      }
+      if (!formData.charge || parseFloat(formData.charge) < 0) {
+        toast.error('Please enter a valid service charge (must be 0 or greater)');
+        setLoading(false);
+        return;
+      }
     }
 
     if (formData.password !== formData.confirmPassword) {
@@ -102,13 +120,18 @@ const Register = () => {
         email: formData.email,
         phone: formData.phone,
         userType: formData.userType,
-        password: formData.password
+        password: formData.password,
+        longitude: parseFloat(formData.longitude),
+        latitude: parseFloat(formData.latitude)
       };
 
-      // Only include occupation if user type is service provider
+      // Only include service provider specific fields if user type is service provider
       if (formData.userType === 'service provider') {
         requestData.occupation = formData.occupation;
+        requestData.charge = parseFloat(formData.charge);
       }
+
+
 
       const response = await axios.post('http://localhost:5000/api/auth/register', requestData);
 
@@ -294,45 +317,171 @@ const Register = () => {
               </select>
             </div>
 
-            {formData.userType === 'service provider' && (
-              <div style={{ marginBottom: '20px' }}>
-                <label htmlFor="occupation" style={{ 
-                  display: 'block', 
-                  marginBottom: '8px', 
-                  fontWeight: '600',
-                  color: '#333'
-                }}>
-                  Occupation *
-                </label>
-                <select
-                  id="occupation"
-                  name="occupation"
-                  value={formData.occupation}
-                  onChange={handleChange}
-                  required
-                  style={{
-                    width: '100%',
-                    height: '45px',
-                    padding: '10px 15px',
-                    border: '1px solid #ddd',
-                    borderRadius: '6px',
-                    fontSize: '16px',
-                    outline: 'none',
-                    transition: 'border-color 0.3s',
-                    backgroundColor: 'white',
-                    color: '#333'
-                  }}
-                  onFocus={(e) => e.target.style.borderColor = '#007bff'}
-                  onBlur={(e) => e.target.style.borderColor = '#ddd'}
-                >
-                  <option value="">Select Occupation</option>
-                  {occupations.map(occupation => (
-                    <option key={occupation} value={occupation}>
-                      {occupation}
-                    </option>
-                  ))}
-                </select>
+                        {/* Location Coordinates for all users */}
+            <div style={{ marginBottom: '20px' }}>
+              <label style={{ 
+                display: 'block', 
+                marginBottom: '8px', 
+                fontWeight: '600',
+                color: '#333'
+              }}>
+                Location Coordinates *
+              </label>
+              <div style={{ display: 'flex', gap: '10px' }}>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="longitude" style={{ 
+                    display: 'block', 
+                    marginBottom: '4px', 
+                    fontSize: '12px',
+                    color: '#666'
+                  }}>
+                    Longitude
+                  </label>
+                  <input
+                    type="number"
+                    id="longitude"
+                    name="longitude"
+                    value={formData.longitude}
+                    onChange={handleChange}
+                    step="0.0001"
+                    placeholder="-74.0060"
+                    required
+                    style={{
+                      width: '100%',
+                      height: '45px',
+                      padding: '10px 15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'border-color 0.3s',
+                      backgroundColor: 'white',
+                      color: '#333'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label htmlFor="latitude" style={{ 
+                    display: 'block', 
+                    marginBottom: '4px', 
+                    fontSize: '12px',
+                    color: '#666'
+                  }}>
+                    Latitude
+                  </label>
+                  <input
+                    type="number"
+                    id="latitude"
+                    name="latitude"
+                    value={formData.latitude}
+                    onChange={handleChange}
+                    step="0.0001"
+                    placeholder="40.7128"
+                    required
+                    style={{
+                      width: '100%',
+                      height: '45px',
+                      padding: '10px 15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'border-color 0.3s',
+                      backgroundColor: 'white',
+                      color: '#333'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                </div>
               </div>
+              <small style={{ color: '#666', fontSize: '12px' }}>
+                Enter your location coordinates (e.g., -74.0060, 40.7128 for New York)
+              </small>
+            </div>
+
+            {formData.userType === 'service provider' && (
+              <>
+                <div style={{ marginBottom: '20px' }}>
+                  <label htmlFor="occupation" style={{ 
+                    display: 'block', 
+                    marginBottom: '8px', 
+                    fontWeight: '600',
+                    color: '#333'
+                  }}>
+                    Occupation *
+                  </label>
+                  <select
+                    id="occupation"
+                    name="occupation"
+                    value={formData.occupation}
+                    onChange={handleChange}
+                    required
+                    style={{
+                      width: '100%',
+                      height: '45px',
+                      padding: '10px 15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'border-color 0.3s',
+                      backgroundColor: 'white',
+                      color: '#333'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  >
+                    <option value="">Select Occupation</option>
+                    {occupations.map(occupation => (
+                      <option key={occupation} value={occupation}>
+                        {occupation}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+
+                <div style={{ marginBottom: '20px' }}>
+                  <label htmlFor="charge" style={{ 
+                    display: 'block', 
+                    marginBottom: '8px', 
+                    fontWeight: '600',
+                    color: '#333'
+                  }}>
+                    Service Charge (Taka) *
+                  </label>
+                  <input
+                    type="number"
+                    id="charge"
+                    name="charge"
+                    value={formData.charge}
+                    onChange={handleChange}
+                    min="0"
+                    step="0.01"
+                    placeholder="0.00"
+                    required
+                    style={{
+                      width: '100%',
+                      height: '45px',
+                      padding: '10px 15px',
+                      border: '1px solid #ddd',
+                      borderRadius: '6px',
+                      fontSize: '16px',
+                      outline: 'none',
+                      transition: 'border-color 0.3s',
+                      backgroundColor: 'white',
+                      color: '#333'
+                    }}
+                    onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                    onBlur={(e) => e.target.style.borderColor = '#ddd'}
+                  />
+                  <small style={{ color: '#666', fontSize: '12px' }}>
+                    Enter your base service charge in Taka (minimum ৳0.00)
+                  </small>
+                </div>
+              </>
             )}
 
             <div style={{ marginBottom: '20px' }}>

@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { toast } from 'react-hot-toast';
 import axios from 'axios';
 import '../styles/Auth.css';
+import Navbar from './navbar';
 
 const Profile = () => {
   const navigate = useNavigate();
@@ -75,15 +76,13 @@ const Profile = () => {
       toast.error('Passwords do not match');
       return false;
     }
-    if (user?.userType === 'service provider') {
-      if (!formData.longitude || !formData.latitude) {
-        toast.error('Longitude and Latitude are required for service providers');
-        return false;
-      }
-      if (isNaN(formData.longitude) || isNaN(formData.latitude)) {
-        toast.error('Longitude and Latitude must be valid numbers');
-        return false;
-      }
+    if (!formData.longitude || !formData.latitude) {
+      toast.error('Longitude and Latitude are required for all users');
+      return false;
+    }
+    if (isNaN(formData.longitude) || isNaN(formData.latitude)) {
+      toast.error('Longitude and Latitude must be valid numbers');
+      return false;
     }
     return true;
   };
@@ -110,11 +109,9 @@ const Profile = () => {
         updateData.password = formData.password;
       }
 
-      // Include location data for service providers
-      if (user?.userType === 'service provider') {
-        updateData.longitude = parseFloat(formData.longitude);
-        updateData.latitude = parseFloat(formData.latitude);
-      }
+      // Include location data for all users
+      updateData.longitude = parseFloat(formData.longitude);
+      updateData.latitude = parseFloat(formData.latitude);
 
       console.log('Sending update data:', updateData);
       console.log('Token:', token);
@@ -169,8 +166,9 @@ const Profile = () => {
   }
 
   return (
-    <div className="auth-container">
-      <div className="container">
+    <div style={{ minHeight: '100vh', backgroundColor: '#f8f9fa' }}>
+      <Navbar />
+      <div className="container" style={{ paddingTop: '80px', paddingBottom: '40px' }}>
         <div className="row justify-content-center">
           <div className="col-md-8 col-lg-6">
             <div className="card shadow-lg">
@@ -249,49 +247,45 @@ const Profile = () => {
                     />
                   </div>
 
-                  {user.userType === 'service provider' && (
-                    <>
-                      <hr className="my-4" />
-                      <h5 className="mb-3">Location Information</h5>
-                      
-                      <div className="row">
-                        <div className="col-md-6 mb-3">
-                          <label htmlFor="latitude" className="form-label">Latitude</label>
-                          <input
-                            type="number"
-                            step="any"
-                            className="form-control"
-                            id="latitude"
-                            name="latitude"
-                            value={formData.latitude}
-                            onChange={handleInputChange}
-                            placeholder="Enter latitude"
-                            required
-                          />
-                        </div>
-                        
-                        <div className="col-md-6 mb-3">
-                          <label htmlFor="longitude" className="form-label">Longitude</label>
-                          <input
-                            type="number"
-                            step="any"
-                            className="form-control"
-                            id="longitude"
-                            name="longitude"
-                            value={formData.longitude}
-                            onChange={handleInputChange}
-                            placeholder="Enter longitude"
-                            required
-                          />
-                        </div>
-                      </div>
-                      
-                      <div className="alert alert-info">
-                        <i className="bi bi-info-circle me-2"></i>
-                        <strong>Note:</strong> Your location coordinates help customers find you on the map.
-                      </div>
-                    </>
-                  )}
+                  <hr className="my-4" />
+                  <h5 className="mb-3">Location Information</h5>
+                  
+                  <div className="row">
+                    <div className="col-md-6 mb-3">
+                      <label htmlFor="latitude" className="form-label">Latitude *</label>
+                      <input
+                        type="number"
+                        step="any"
+                        className="form-control"
+                        id="latitude"
+                        name="latitude"
+                        value={formData.latitude}
+                        onChange={handleInputChange}
+                        placeholder="Enter latitude"
+                        required
+                      />
+                    </div>
+                    
+                    <div className="col-md-6 mb-3">
+                      <label htmlFor="longitude" className="form-label">Longitude *</label>
+                      <input
+                        type="number"
+                        step="any"
+                        className="form-control"
+                        id="longitude"
+                        name="longitude"
+                        value={formData.longitude}
+                        onChange={handleInputChange}
+                        placeholder="Enter longitude"
+                        required
+                      />
+                    </div>
+                  </div>
+                  
+                  <div className="alert alert-info">
+                    <i className="bi bi-info-circle me-2"></i>
+                    <strong>Note:</strong> Your location coordinates are required for all users and help with location-based services.
+                  </div>
 
                   <div className="d-grid gap-2 mt-4">
                     <button

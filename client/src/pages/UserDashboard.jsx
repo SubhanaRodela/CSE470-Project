@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { MapContainer, TileLayer, Marker, Popup, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Popup, useMap, Polyline } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import '../styles/Dashboard.css';
@@ -9,6 +9,7 @@ import ReviewModal from '../components/ReviewModal';
 import MessageNotification from '../components/MessageNotification';
 import ProfileCard from '../components/ProfileCard';
 import BookingModal from '../components/BookingModal';
+import Navbar from './navbar';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -18,8 +19,44 @@ L.Icon.Default.mergeOptions({
   shadowUrl: 'https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.7.1/images/marker-shadow.png',
 });
 
+// Custom marker icon with info card
+const createCustomMarkerIcon = (marker) => {
+  const divIcon = L.divIcon({
+    className: 'custom-marker-icon',
+    html: `
+      <div class="marker-info-card" data-provider-id="${marker.providerId || marker.id}">
+        <div class="marker-card-header">
+          <h6 class="marker-name">${marker.name}</h6>
+          <div class="marker-rating">
+            <i class="bi bi-star-fill text-warning"></i>
+            <span class="rating-number">${marker.averageRating || 'N/A'}</span>
+          </div>
+        </div>
+        <div class="marker-card-body">
+          <p class="marker-occupation">
+            <i class="bi bi-briefcase me-1"></i>
+            ${marker.occupation || 'N/A'}
+          </p>
+          ${marker.charge ? `
+            <p class="marker-charge">
+              <i class="bi bi-currency-dollar me-1"></i>
+              ৳${marker.charge}
+            </p>
+          ` : ''}
+        </div>
+
+      </div>
+    `,
+    iconSize: [160, 90],
+    iconAnchor: [80, 90],
+    popupAnchor: [0, -90]
+  });
+  
+  return divIcon;
+};
+
 // Map Controls Component
-const MapControls = ({ mapRef }) => {
+const MapControls = ({ mapRef, userLocation, onGoHome }) => {
   const map = useMap();
 
   const zoomIn = () => {
@@ -31,7 +68,13 @@ const MapControls = ({ mapRef }) => {
   };
 
   const goHome = () => {
-    map.setView([51.505, -0.09], 13);
+    if (userLocation && userLocation.latitude && userLocation.longitude) {
+      map.setView([userLocation.latitude, userLocation.longitude], 15);
+      onGoHome(); // Trigger the callback to show user marker
+    } else {
+      // Fallback to default location if user location not available
+      map.setView([51.505, -0.09], 13);
+    }
   };
 
   return (
@@ -42,7 +85,7 @@ const MapControls = ({ mapRef }) => {
       <button className="control-button" onClick={zoomOut} title="Zoom Out">
         <i className="bi bi-dash-lg"></i>
       </button>
-      <button className="control-button" onClick={goHome} title="Home">
+      <button className="control-button" onClick={goHome} title="Go to My Location">
         <i className="bi bi-house"></i>
       </button>
     </div>
@@ -64,6 +107,10 @@ const UserDashboard = () => {
   const [showProviderSuggestions, setShowProviderSuggestions] = useState(false);
   const [selectedProvider, setSelectedProvider] = useState(null);
   const [allProviders, setAllProviders] = useState([]);
+  
+  // Occupation suggestions states
+  const [occupationSuggestions, setOccupationSuggestions] = useState([]);
+  const [showOccupationSuggestions, setShowOccupationSuggestions] = useState(false);
   
   // Review modal states
   const [showReviewModal, setShowReviewModal] = useState(false);
@@ -93,6 +140,15 @@ const UserDashboard = () => {
     return saved ? JSON.parse(saved) : false;
   });
   const [isResizing, setIsResizing] = useState(false);
+  
+  // User location marker state
+  const [showUserMarker, setShowUserMarker] = useState(false);
+  
+  // Route states
+  const [routeData, setRouteData] = useState(null);
+  const [routePolyline, setRoutePolyline] = useState(null);
+  const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
+  const [routeError, setRouteError] = useState(null);
   
   const mapRef = useRef(null);
   const sidebarRef = useRef(null);
@@ -128,7 +184,22 @@ const UserDashboard = () => {
       );
       const data = await response.json();
       
-      setAllProviders(data.serviceProviders || []);
+      console.log('Service providers data received:', data);
+      console.log('Service providers array:', data.serviceProviders);
+      
+      // Fetch ratings for all providers
+      const providersWithRatings = await Promise.all(
+        (data.serviceProviders || []).map(async (provider) => {
+          const ratingData = await fetchProviderRating(provider.id);
+          return { 
+            ...provider, 
+            averageRating: ratingData.averageRating,
+            totalReviews: ratingData.totalReviews
+          };
+        })
+      );
+      
+      setAllProviders(providersWithRatings);
       
       // Also test the all-users endpoint
       const allUsersResponse = await fetch('http://localhost:5000/api/auth/all-users');
@@ -136,6 +207,39 @@ const UserDashboard = () => {
     } catch (error) {
       console.error('Error loading service providers:', error);
     }
+  };
+
+  // Fetch average rating for a service provider
+  const fetchProviderRating = async (providerId) => {
+    try {
+      const response = await fetch(`http://localhost:5000/api/reviews/service-provider/${providerId}`);
+      const data = await response.json();
+      
+      if (data.success && data.reviews && data.reviews.length > 0) {
+        const totalRating = data.reviews.reduce((sum, review) => sum + review.rating, 0);
+        const averageRating = (totalRating / data.reviews.length).toFixed(1);
+        return {
+          averageRating,
+          totalReviews: data.reviews.length
+        };
+      }
+      return {
+        averageRating: 'N/A',
+        totalReviews: 0
+      };
+    } catch (error) {
+      console.error('Error fetching provider rating:', error);
+      return {
+        averageRating: 'N/A',
+        totalReviews: 0
+      };
+    }
+  };
+
+  // Get unique occupations from all providers
+  const getUniqueOccupations = () => {
+    const occupations = allProviders.map(provider => provider.occupation);
+    return [...new Set(occupations)].sort();
   };
 
   // Load user's favorite service providers
@@ -156,11 +260,30 @@ const UserDashboard = () => {
       
       if (data.success) {
         const favoritesList = data.favorites || [];
-        setFavorites(favoritesList);
+        
+        // Fetch ratings for favorite providers
+        const favoritesWithRatings = await Promise.all(
+          favoritesList.map(async (favorite) => {
+            if (favorite.serviceProvider && favorite.serviceProvider.id) {
+              const ratingData = await fetchProviderRating(favorite.serviceProvider.id);
+              return {
+                ...favorite,
+                serviceProvider: {
+                  ...favorite.serviceProvider,
+                  averageRating: ratingData.averageRating,
+                  totalReviews: ratingData.totalReviews
+                }
+              };
+            }
+            return favorite;
+          })
+        );
+        
+        setFavorites(favoritesWithRatings);
         
         // Create a map of favorite statuses for quick lookup
         const statusMap = {};
-        favoritesList.forEach(fav => {
+        favoritesWithRatings.forEach(fav => {
           if (fav.serviceProvider && fav.serviceProvider.id) {
             statusMap[fav.serviceProvider.id] = true;
           }
@@ -354,30 +477,140 @@ const UserDashboard = () => {
       const response = await fetch(url);
       const data = await response.json();
       setProviderSuggestions(data.serviceProviders || []);
-      setShowProviderSuggestions(true);
+      // Don't automatically show provider suggestions - let the calling function decide
     } catch (error) {
       console.error('Error searching service providers:', error);
+    }
+  };
+
+  // Show provider suggestions explicitly
+  const displayProviderSuggestions = () => {
+    if (providerSuggestions.length > 0) {
+      setShowProviderSuggestions(true);
+      setShowOccupationSuggestions(false);
+    }
+  };
+
+  // Search by occupation and show on map
+  const searchByOccupation = async (occupation) => {
+    try {
+      // Update the search query immediately for better UX
+      setProviderSearchQuery(occupation);
+      setShowProviderSuggestions(false);
+      setShowOccupationSuggestions(false);
+      
+      const response = await fetch(
+        `http://localhost:5000/api/auth/search-service-providers?query=${encodeURIComponent(occupation)}`
+      );
+      const data = await response.json();
+      
+      if (data.serviceProviders && data.serviceProviders.length > 0) {
+        // Clear existing markers and add new ones for all matching providers
+        const newMarkers = await Promise.all(data.serviceProviders.map(async (provider) => {
+          const ratingData = await fetchProviderRating(provider.id);
+          return {
+            id: `provider-${provider.id}`,
+            providerId: provider.id,
+            position: [provider.latitude, provider.longitude],
+            name: provider.name,
+            type: 'Service Provider',
+            occupation: provider.occupation,
+            phone: provider.phone,
+            charge: provider.charge,
+            averageRating: ratingData.averageRating,
+            totalReviews: ratingData.totalReviews
+          };
+        }));
+        
+        setMarkers(newMarkers);
+        
+        // If there are multiple providers, center the map to show all
+        if (newMarkers.length > 1) {
+          const bounds = newMarkers.reduce((bounds, marker) => {
+            bounds.extend(marker.position);
+            return bounds;
+          }, L.latLngBounds());
+          
+          if (mapRef.current) {
+            mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+          }
+        } else if (newMarkers.length === 1 && mapRef.current) {
+          // If only one provider, center on it
+          mapRef.current.setView(newMarkers[0].position, 15);
+        }
+        
+        console.log(`Found ${newMarkers.length} ${occupation}(s) on the map`);
+        
+        // Show notification
+        showNotification(`Found ${newMarkers.length} ${occupation}(s) on the map`, 'success');
+      } else {
+        // Show notification if no providers found
+        showNotification(`No ${occupation} providers found`, 'info');
+      }
+    } catch (error) {
+      console.error('Error searching by occupation:', error);
+      showNotification(`Error searching for ${occupation}`, 'error');
     }
   };
 
   const handleProviderSearchChange = (e) => {
     const query = e.target.value;
     setProviderSearchQuery(query);
-    searchServiceProviders(query);
+    
+    if (query.length >= 2) {
+      // Show occupation suggestions first
+      const uniqueOccupations = getUniqueOccupations();
+      const matchingOccupations = uniqueOccupations.filter(occupation =>
+        occupation.toLowerCase().includes(query.toLowerCase())
+      );
+      
+      // Only show occupation suggestions if there are matching occupations
+      if (matchingOccupations.length > 0) {
+        setOccupationSuggestions(matchingOccupations);
+        setShowOccupationSuggestions(true);
+        setShowProviderSuggestions(false); // Hide provider suggestions when showing occupation suggestions
+      } else {
+        // If no occupation matches, then search for service providers
+        setOccupationSuggestions([]);
+        setShowOccupationSuggestions(false);
+        searchServiceProviders(query);
+      }
+    } else {
+      setOccupationSuggestions([]);
+      setShowOccupationSuggestions(false);
+      setShowProviderSuggestions(false);
+    }
   };
 
-  const handleProviderSuggestionClick = (provider) => {
+  const handleProviderSearchKeyDown = (e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      const query = e.target.value.trim();
+      
+      if (query.length >= 2) {
+        // Search by occupation and show all matching providers on map
+        searchByOccupation(query);
+      }
+    }
+  };
+
+  const handleProviderSuggestionClick = async (provider) => {
     setProviderSearchQuery(`${provider.name} - ${provider.occupation}`);
     setShowProviderSuggestions(false);
     setProviderSuggestions([]);
     
+    const ratingData = await fetchProviderRating(provider.id);
     const newMarker = {
       id: `provider-${provider.id}`,
+      providerId: provider.id,
       position: [provider.latitude, provider.longitude],
       name: provider.name,
       type: 'Service Provider',
       occupation: provider.occupation,
-      phone: provider.phone
+      phone: provider.phone,
+      charge: provider.charge,
+      averageRating: ratingData.averageRating,
+      totalReviews: ratingData.totalReviews
     };
     
     setMarkers(prev => [...prev.filter(m => !m.id.startsWith('provider-')), newMarker]);
@@ -422,8 +655,54 @@ const UserDashboard = () => {
 
   // Profile card functions
   const openProfileCard = (provider) => {
-    setSelectedProviderForProfile(provider);
+    console.log('Opening profile card for provider:', provider);
+    console.log('Provider charge field:', provider.charge);
+    
+    // Find the marker data to get rating information
+    const marker = markers.find(m => m.providerId === provider.id || m.id === `provider-${provider.id}`);
+    console.log('Found marker data:', marker);
+    
+    // Create provider object with rating data
+    const providerWithRatings = {
+      ...provider,
+      averageRating: marker?.averageRating || provider.averageRating || 0,
+      totalReviews: marker?.totalReviews || provider.totalReviews || 0
+    };
+    
+    console.log('Provider with ratings:', providerWithRatings);
+    setSelectedProviderForProfile(providerWithRatings);
     setShowProfileCard(true);
+  };
+
+  // Handle marker card click to open profile
+  const handleMarkerClick = async (marker) => {
+    console.log('Marker clicked:', marker);
+    if (marker.providerId) {
+      // Find the provider data from allProviders
+      const provider = allProviders.find(p => p.id === marker.providerId);
+      console.log('Found provider:', provider);
+      if (provider) {
+        // Create provider object with rating data from marker
+        const providerWithRatings = {
+          ...provider,
+          averageRating: marker.averageRating || 0,
+          totalReviews: marker.totalReviews || 0
+        };
+        console.log('Provider with ratings from marker:', providerWithRatings);
+        setSelectedProviderForProfile(providerWithRatings);
+        setShowProfileCard(true);
+      }
+    }
+  };
+
+  // Handle route calculation from marker
+  const handleMarkerRoute = async (marker) => {
+    if (marker.providerId) {
+      const provider = allProviders.find(p => p.id === marker.providerId);
+      if (provider) {
+        await calculateRoute(provider);
+      }
+    }
   };
 
   const closeProfileCard = () => {
@@ -450,6 +729,202 @@ const UserDashboard = () => {
       navigate(`/chatbox?providerId=${selectedProviderForProfile.id}`);
       closeProfileCard();
     }
+  };
+
+  // Handle going to user's home location
+  const handleGoHome = () => {
+    if (user && user.latitude && user.longitude) {
+      // Only show user marker if it's not already shown
+      if (!showUserMarker) {
+        setShowUserMarker(true);
+      }
+      // The marker will be automatically added to the markers array
+    }
+  };
+
+  // Calculate route between user and provider using free routing API
+  const calculateRoute = async (provider) => {
+    if (!user || !user.latitude || !user.longitude || !provider.latitude || !provider.longitude) {
+      setRouteError('Location data not available');
+      return;
+    }
+
+    setIsCalculatingRoute(true);
+    setRouteError(null);
+    setRouteData(null);
+    setRoutePolyline(null);
+
+    // Show both user and provider markers when calculating route
+    setShowUserMarker(true);
+
+    try {
+      // Using OSRM (Open Source Routing Machine) - completely free and reliable
+      const startPoint = `${user.longitude},${user.latitude}`;
+      const endPoint = `${provider.longitude},${provider.latitude}`;
+      
+      const url = `https://router.project-osrm.org/route/v1/driving/${startPoint};${endPoint}?overview=full&geometries=geojson&steps=true`;
+
+      const response = await fetch(url);
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      
+      if (data.routes && data.routes.length > 0) {
+        const route = data.routes[0];
+        const coordinates = route.geometry.coordinates.map(coord => [coord[1], coord[0]]); // Convert to [lat, lng]
+        
+        // Extract route information
+        const distance = route.distance; // in meters
+        const duration = route.duration; // in seconds
+        
+        const routeInfo = {
+          distance: (distance / 1000).toFixed(2), // Convert to km
+          duration: Math.round(duration / 60), // Convert to minutes
+          coordinates: coordinates,
+          provider: provider,
+          isEstimated: false
+        };
+
+        setRouteData(routeInfo);
+        setRoutePolyline(coordinates);
+        
+        // Fit map to show the entire route
+        if (mapRef.current) {
+          const bounds = L.latLngBounds(coordinates);
+          mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+        }
+
+        showNotification(`Route calculated: ${routeInfo.distance} km, ${routeInfo.duration} min`, 'success');
+      } else {
+        throw new Error('No route found');
+      }
+    } catch (error) {
+      console.error('Error calculating route:', error);
+      
+      // Try alternative free routing service - Valhalla
+      try {
+        const startPoint = `${user.longitude},${user.latitude}`;
+        const endPoint = `${provider.longitude},${provider.latitude}`;
+        
+        const valhallaUrl = `https://valhalla1.openstreetmap.de/route?json={"locations":[{"lat":${user.latitude},"lon":${user.longitude}},{"lat":${provider.latitude},"lon":${provider.longitude}}],"costing":"auto","units":"kilometers"}`;
+        
+        const valhallaResponse = await fetch(valhallaUrl);
+        
+        if (valhallaResponse.ok) {
+          const valhallaData = await valhallaResponse.json();
+          
+          if (valhallaData.trip && valhallaData.trip.legs && valhallaData.trip.legs.length > 0) {
+            const leg = valhallaData.trip.legs[0];
+            const coordinates = leg.shape.map(coord => {
+              const [lat, lng] = coord.split(',');
+              return [parseFloat(lat), parseFloat(lng)];
+            });
+            
+            const routeInfo = {
+              distance: (leg.length / 1000).toFixed(2), // Convert to km
+              duration: Math.round(leg.time / 60), // Convert to minutes
+              coordinates: coordinates,
+              provider: provider,
+              isEstimated: false
+            };
+
+            setRouteData(routeInfo);
+            setRoutePolyline(coordinates);
+            
+            // Fit map to show the entire route
+            if (mapRef.current) {
+              const bounds = L.latLngBounds(coordinates);
+              mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+            }
+
+            showNotification(`Route calculated: ${routeInfo.distance} km, ${routeInfo.duration} min`, 'success');
+            return;
+          }
+        }
+        
+        throw new Error('Both routing services failed');
+      } catch (valhallaError) {
+        console.error('Valhalla routing also failed:', valhallaError);
+        
+        // Final fallback: Create a realistic route simulation using road-like curves
+        try {
+          const userLat = user.latitude;
+          const userLng = user.longitude;
+          const providerLat = provider.latitude;
+          const providerLng = provider.longitude;
+          
+          // Calculate straight-line distance using Haversine formula
+          const R = 6371; // Earth's radius in km
+          const dLat = (providerLat - userLat) * Math.PI / 180;
+          const dLng = (providerLng - userLng) * Math.PI / 180;
+          const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+                    Math.cos(userLat * Math.PI / 180) * Math.cos(providerLat * Math.PI / 180) *
+                    Math.sin(dLng/2) * Math.sin(dLng/2);
+          const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+          const distance = R * c;
+          
+          // Create a more realistic route simulation with curves (not straight line)
+          const steps = 20;
+          const coordinates = [];
+          
+          for (let i = 0; i <= steps; i++) {
+            const t = i / steps;
+            const lat = userLat + (providerLat - userLat) * t;
+            const lng = userLng + (providerLng - userLng) * t;
+            
+            // Add some realistic curve variation to simulate road routing
+            if (i > 0 && i < steps) {
+              const curveFactor = 0.1; // Adjust this for more/less curve
+              const midPoint = (userLat + providerLat) / 2;
+              const curveOffset = Math.sin(t * Math.PI) * curveFactor * (providerLat - userLat);
+              coordinates.push([lat + curveOffset, lng]);
+            } else {
+              coordinates.push([lat, lng]);
+            }
+          }
+          
+          // Estimate travel time (assuming 40 km/h average speed for realistic roads)
+          const estimatedTime = Math.round(distance * 1.5); // 1.5 minutes per km for realistic roads
+          
+          const routeInfo = {
+            distance: (distance * 1.2).toFixed(2), // Add 20% for realistic road distance
+            duration: estimatedTime,
+            coordinates: coordinates,
+            provider: provider,
+            isEstimated: true
+          };
+
+          setRouteData(routeInfo);
+          setRoutePolyline(coordinates);
+          
+          // Fit map to show the entire route
+          if (mapRef.current) {
+            const bounds = L.latLngBounds(coordinates);
+            mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+          }
+
+          showNotification(`Simulated route: ${routeInfo.distance} km, ~${routeInfo.duration} min (road simulation)`, 'info');
+        } catch (fallbackError) {
+          console.error('All routing methods failed:', fallbackError);
+          setRouteError('Failed to calculate route. Please try again.');
+          showNotification('Failed to calculate route', 'error');
+        }
+      }
+    } finally {
+      setIsCalculatingRoute(false);
+    }
+  };
+
+  // Clear route
+  const clearRoute = () => {
+    setRouteData(null);
+    setRoutePolyline(null);
+    setRouteError(null);
+    setShowUserMarker(false); // Hide user marker when clearing route
+    showNotification('Route cleared', 'info');
   };
 
   // Sidebar resize functionality
@@ -517,6 +992,77 @@ const UserDashboard = () => {
     };
   }, [isSidebarCollapsed, showProfileCard]);
 
+  // Add click event listeners to marker cards
+  useEffect(() => {
+    const handleMarkerCardClick = (e) => {
+      const markerCard = e.target.closest('.marker-info-card');
+      if (markerCard) {
+        const providerId = markerCard.dataset.providerId;
+        if (providerId) {
+          const marker = markers.find(m => m.providerId === providerId || m.id === providerId);
+          if (marker) {
+            handleMarkerClick(marker);
+          }
+        }
+      }
+    };
+
+    // Handle route button clicks in marker cards
+    const handleMarkerRouteClick = (e) => {
+      if (e.target.closest('.marker-route-btn')) {
+        e.stopPropagation();
+        const markerCard = e.target.closest('.marker-info-card');
+        if (markerCard) {
+          const providerId = markerCard.dataset.providerId;
+          if (providerId) {
+            const marker = markers.find(m => m.providerId === providerId || m.id === providerId);
+            if (marker) {
+              handleMarkerRoute(marker);
+            }
+          }
+        }
+      }
+    };
+
+    document.addEventListener('click', handleMarkerCardClick);
+    document.addEventListener('click', handleMarkerRouteClick);
+    return () => {
+      document.removeEventListener('click', handleMarkerCardClick);
+      document.removeEventListener('click', handleMarkerRouteClick);
+    };
+  }, [markers]);
+
+  // Handle click outside to close suggestions
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      // Close occupation suggestions if clicking outside
+      if (showOccupationSuggestions) {
+        setShowOccupationSuggestions(false);
+      }
+      
+      // Close provider suggestions if clicking outside
+      if (showProviderSuggestions) {
+        setShowProviderSuggestions(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showOccupationSuggestions, showProviderSuggestions]);
+
+  // Add a small delay before hiding occupation suggestions to prevent flickering
+  useEffect(() => {
+    if (occupationSuggestions.length === 0 && showOccupationSuggestions) {
+      const timer = setTimeout(() => {
+        setShowOccupationSuggestions(false);
+      }, 100); // Small delay to prevent flickering
+      
+      return () => clearTimeout(timer);
+    }
+  }, [occupationSuggestions.length, showOccupationSuggestions]);
+
   // Show notification
   const showNotification = (message, type = 'success') => {
     setNotification({ show: true, message, type });
@@ -529,33 +1075,10 @@ const UserDashboard = () => {
     return <div className="text-center mt-5">Loading...</div>;
   }
 
-  return (
+    return (
     <div className="dashboard-container">
+      <Navbar />
       <div className="container-fluid">
-        <div className="row">
-          <div className="col-12">
-            <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-              <div className="container-fluid">
-                <span className="navbar-brand">Rodela</span>
-                <div className="navbar-nav ms-auto">
-                  <MessageNotification userType={user?.userType} />
-                  <button 
-                    className="btn btn-outline-light me-2"
-                    onClick={() => navigate('/profile')}
-                  >
-                    Profile
-                  </button>
-                  <button 
-                    className="btn btn-outline-light"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </nav>
-          </div>
-        </div>
 
         <div className="map-container">
           {/* Sidebar */}
@@ -621,14 +1144,66 @@ const UserDashboard = () => {
             
             <h3>Service Provider Search</h3>
             <div className="search-container">
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search by name or occupation..."
-                value={providerSearchQuery}
-                onChange={handleProviderSearchChange}
-                onFocus={() => setShowProviderSuggestions(true)}
-              />
+              <div className="search-input-group">
+                <input
+                  type="text"
+                  className="search-input"
+                  placeholder="Search by name or occupation... (Press Enter to search by occupation)"
+                  value={providerSearchQuery}
+                  onChange={handleProviderSearchChange}
+                  onKeyDown={handleProviderSearchKeyDown}
+                  onFocus={() => setShowProviderSuggestions(true)}
+                />
+                <button
+                  className="search-button"
+                  onClick={() => {
+                    if (providerSearchQuery.trim().length >= 2) {
+                      searchByOccupation(providerSearchQuery.trim());
+                    }
+                  }}
+                  title="Search manually (or click suggestions above)"
+                >
+                  <i className="bi bi-search"></i>
+                </button>
+              </div>
+              
+              {/* Occupation Suggestions */}
+              {showOccupationSuggestions && occupationSuggestions.length > 0 && (
+                <div className="search-suggestions">
+                  {occupationSuggestions.map((occupation, index) => (
+                    <div
+                      key={index}
+                      className="suggestion-item occupation-suggestion"
+                      onClick={() => {
+                        searchByOccupation(occupation);
+                        setProviderSearchQuery(occupation);
+                        setShowOccupationSuggestions(false);
+                      }}
+                    >
+                      <i className="bi bi-briefcase me-2"></i>
+                      <strong>{occupation}</strong>
+                      <small className="text-muted ms-2">
+                        ({allProviders.filter(p => p.occupation === occupation).length} providers)
+                      </small>
+                    </div>
+                  ))}
+                </div>
+              )}
+              
+              {/* Provider Suggestions Available Indicator */}
+              {!showOccupationSuggestions && providerSuggestions.length > 0 && !showProviderSuggestions && (
+                <div className="provider-suggestions-indicator">
+                  <button
+                    className="btn btn-sm btn-outline-info"
+                    onClick={displayProviderSuggestions}
+                    type="button"
+                  >
+                    <i className="bi bi-people me-1"></i>
+                    Show {providerSuggestions.length} provider suggestion{providerSuggestions.length !== 1 ? 's' : ''}
+                  </button>
+                </div>
+              )}
+              
               {showProviderSuggestions && providerSuggestions.length > 0 && (
                 <div className="search-suggestions">
                   {providerSuggestions.map((provider, index) => (
@@ -669,6 +1244,17 @@ const UserDashboard = () => {
                           title="Show on Map"
                         >
                           <i className="bi bi-geo-alt"></i>
+                        </button>
+                        <button 
+                          className="btn btn-sm btn-outline-warning me-1"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            calculateRoute(provider);
+                            setShowProviderSuggestions(false);
+                          }}
+                          title="Show Route"
+                        >
+                          <i className="bi bi-signpost-2"></i>
                         </button>
                         <button 
                           className="btn btn-sm btn-outline-success"
@@ -725,6 +1311,16 @@ const UserDashboard = () => {
                       <strong>{provider.name}</strong>
                       <br />
                       <small className="text-muted">{provider.occupation}</small>
+                      <div className="provider-rating-charge">
+                        <small className="text-warning me-2">
+                          <i className="bi bi-star-fill"></i> {provider.averageRating || 'N/A'}
+                        </small>
+                        {provider.charge && (
+                          <small className="text-success">
+                            <i className="bi bi-currency-dollar"></i> ৳{provider.charge}
+                          </small>
+                        )}
+                      </div>
                     </div>
                     <div className="provider-actions">
                       <button 
@@ -749,6 +1345,16 @@ const UserDashboard = () => {
                         title="View Reviews & Comments"
                       >
                         <i className="bi bi-chat-dots"></i>
+                      </button>
+                      <button 
+                        className="btn btn-sm btn-outline-warning me-2"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          calculateRoute(provider);
+                        }}
+                        title="Show Route"
+                      >
+                        <i className="bi bi-signpost-2"></i>
                       </button>
                       <button 
                         className="btn btn-sm btn-outline-success me-2"
@@ -796,7 +1402,7 @@ const UserDashboard = () => {
               <h5 className="mb-0">My Favorite Providers</h5>
               <button 
                 className="btn btn-sm btn-outline-secondary"
-                onClick={loadUserFavorites}
+                onClick={() => loadUserFavorites()}
                 title="Refresh Favorites"
               >
                 <i className="bi bi-arrow-clockwise"></i>
@@ -810,6 +1416,16 @@ const UserDashboard = () => {
                       <strong>{favorite.serviceProvider.name}</strong>
                       <br />
                       <small className="text-muted">{favorite.serviceProvider.occupation}</small>
+                      <div className="provider-rating-charge">
+                        <small className="text-warning me-2">
+                          <i className="bi bi-star-fill"></i> {favorite.serviceProvider.averageRating || 'N/A'}
+                        </small>
+                        {favorite.serviceProvider.charge && (
+                          <small className="text-success">
+                            <i className="bi bi-currency-dollar"></i> ৳{favorite.serviceProvider.charge}
+                          </small>
+                        )}
+                      </div>
                       <br />
                       <small className="text-muted">Added: {new Date(favorite.addedAt || favorite.createdAt).toLocaleDateString()}</small>
                     </div>
@@ -837,6 +1453,13 @@ const UserDashboard = () => {
                       >
                         <i className="bi bi-chat-dots"></i>
                       </button>
+                      <button 
+                        className="btn btn-sm btn-outline-warning me-2"
+                        onClick={() => calculateRoute(favorite.serviceProvider)}
+                        title="Show Route"
+                      >
+                        <i className="bi bi-signpost-2"></i>
+                      </button>
 
                       <button 
                         className="btn btn-sm btn-danger"
@@ -858,7 +1481,101 @@ const UserDashboard = () => {
               )}
             </div>
           </div> {/* End sidebar-content */}
-          </div> {/* End sidebar */}
+          
+          {/* Route Information Section */}
+          {routeData && (
+            <>
+              <hr className="my-4" />
+              <div className="route-info-section">
+                <div className="d-flex justify-content-between align-items-center mb-3">
+                  <h5 className="mb-0">
+                    <i className="bi bi-signpost-2 text-warning me-2"></i>
+                    Route to {routeData.provider.name}
+                    {routeData.isEstimated ? (
+                      <span className="badge bg-warning text-dark ms-2">Simulated</span>
+                    ) : (
+                      <span className="badge bg-success text-white ms-2">Real Route</span>
+                    )}
+                  </h5>
+                  <button 
+                    className="btn btn-sm btn-outline-secondary"
+                    onClick={clearRoute}
+                    title="Clear Route"
+                  >
+                    <i className="bi bi-x-lg"></i>
+                  </button>
+                </div>
+                
+                <div className="route-details">
+                  <div className="distance-info mb-3">
+                    <div className="distance-badge mb-2">
+                      <i className="bi bi-arrow-right-circle me-2"></i>
+                      {routeData.distance} km
+                    </div>
+                    <div className="estimated-time">
+                      <i className="bi bi-clock me-1"></i>
+                      Estimated time: {routeData.duration} minutes
+                      {routeData.isEstimated && (
+                        <span className="text-muted ms-1">(approximate)</span>
+                      )}
+                    </div>
+                  </div>
+                  
+                  <div className="provider-route-info">
+                    <p className="mb-1">
+                      <strong>From:</strong> Your Location
+                    </p>
+                    <p className="mb-1">
+                      <strong>To:</strong> {routeData.provider.name} ({routeData.provider.occupation})
+                    </p>
+                    <p className="mb-0">
+                      <strong>Address:</strong> {routeData.provider.address || 'Location coordinates available'}
+                    </p>
+                  </div>
+                  
+                  {routeData.isEstimated && (
+                    <div className="alert alert-warning mt-3 mb-0">
+                      <i className="bi bi-info-circle me-2"></i>
+                      <small>
+                        This is a road simulation. For exact street routing, please try again later when routing services are available.
+                      </small>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Route Error Display */}
+          {routeError && (
+            <>
+              <hr className="my-4" />
+              <div className="alert alert-danger">
+                <i className="bi bi-exclamation-triangle me-2"></i>
+                <strong>Route Error:</strong> {routeError}
+                <button 
+                  className="btn btn-sm btn-outline-danger ms-2"
+                  onClick={() => setRouteError(null)}
+                >
+                  Dismiss
+                </button>
+              </div>
+            </>
+          )}
+
+          {/* Route Loading State */}
+          {isCalculatingRoute && (
+            <>
+              <hr className="my-4" />
+              <div className="text-center p-3">
+                <div className="spinner-border text-primary" role="status">
+                  <span className="visually-hidden">Loading...</span>
+                </div>
+                <p className="mt-2 mb-0">Calculating route...</p>
+              </div>
+            </>
+          )}
+        </div> {/* End sidebar */}
 
           {/* Map Area */}
           <div 
@@ -873,27 +1590,59 @@ const UserDashboard = () => {
             >
               <TileLayer
                 attribution='&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
-                url="https://{s}.tile.openstreetmap.fr/hot/{z}/{x}/{y}.png"
+                url="https://tiles.stadiamaps.com/tiles/alidade_smooth/{z}/{x}/{y}.png" 
               />
               
               {markers.map((marker) => (
-                <Marker key={marker.id} position={marker.position}>
-                  <Popup>
-                    <div>
-                      <h6>{marker.name}</h6>
-                      <p className="mb-1">Type: {marker.type}</p>
-                      {marker.occupation && (
-                        <p className="mb-1"><strong>Occupation:</strong> {marker.occupation}</p>
-                      )}
-                      {marker.phone && (
-                        <p className="mb-0"><strong>Phone:</strong> {marker.phone}</p>
-                      )}
-                    </div>
-                  </Popup>
-                </Marker>
+                <Marker key={marker.id} position={marker.position} icon={createCustomMarkerIcon(marker)} />
               ))}
               
-              <MapControls mapRef={mapRef} />
+              {/* User location marker */}
+              {showUserMarker && user && user.latitude && user.longitude && (
+                <Marker 
+                  key="user-location"
+                  position={[user.latitude, user.longitude]}
+                  icon={L.divIcon({
+                    className: 'user-location-marker',
+                    html: `
+                      <div class="user-marker-info">
+                        <div class="user-marker-header">
+                          <h6 class="user-marker-name">My Location</h6>
+                          <div class="user-marker-icon">
+                            <i class="bi bi-house-fill"></i>
+                          </div>
+                        </div>
+                        <div class="user-marker-body">
+                          <p class="user-marker-address">
+                            <i class="bi bi-geo-alt me-1"></i>
+                            Your registered location
+                          </p>
+                        </div>
+                      </div>
+                    `,
+                    iconSize: [160, 90],
+                    iconAnchor: [80, 90],
+                    popupAnchor: [0, -90]
+                  })}
+                />
+              )}
+
+              {/* Route polyline */}
+              {routePolyline && (
+                <Polyline
+                  positions={routePolyline}
+                  color="#007bff"
+                  weight={4}
+                  opacity={0.8}
+                  dashArray="10, 5"
+                />
+              )}
+              
+                              <MapControls 
+                  mapRef={mapRef} 
+                  userLocation={user}
+                  onGoHome={handleGoHome}
+                />
             </MapContainer>
           </div>
         </div>
@@ -918,6 +1667,12 @@ const UserDashboard = () => {
         onBookNow={() => {
           if (selectedProviderForProfile) {
             openBookingModal(selectedProviderForProfile);
+            closeProfileCard();
+          }
+        }}
+        onShowRoute={() => {
+          if (selectedProviderForProfile) {
+            calculateRoute(selectedProviderForProfile);
             closeProfileCard();
           }
         }}

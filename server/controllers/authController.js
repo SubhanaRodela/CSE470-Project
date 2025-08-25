@@ -1,12 +1,13 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const { createWallet } = require('./walletController');
 
 const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret_key_here';
 
 // Register user
 const register = async (req, res) => {
   try {
-    const { name, email, phone, occupation, userType, password } = req.body;
+    const { name, email, phone, occupation, userType, password, longitude, latitude, charge } = req.body;
 
     // Check if user already exists
     const existingUser = await User.findOne({ email });
@@ -14,9 +15,19 @@ const register = async (req, res) => {
       return res.status(400).json({ message: 'User already exists with this email' });
     }
 
-    // Validate occupation for service providers
-    if (userType === 'service provider' && !occupation) {
-      return res.status(400).json({ message: 'Occupation is required for service providers' });
+    // Validate required fields for all users
+    if (!longitude || !latitude) {
+      return res.status(400).json({ message: 'Location coordinates are required for all users' });
+    }
+
+    // Validate required fields for service providers
+    if (userType === 'service provider') {
+      if (!occupation) {
+        return res.status(400).json({ message: 'Occupation is required for service providers' });
+      }
+      if (!charge || parseFloat(charge) < 0) {
+        return res.status(400).json({ message: 'Valid service charge is required for service providers' });
+      }
     }
 
     // Create user data object
@@ -25,21 +36,29 @@ const register = async (req, res) => {
       email,
       phone,
       userType,
-      password
+      password,
+      longitude: parseFloat(longitude),
+      latitude: parseFloat(latitude)
     };
 
-    // Only include occupation if user type is service provider
+    // Only include service provider specific fields if user type is service provider
     if (userType === 'service provider') {
       userData.occupation = occupation;
-      // Set default location (can be updated later)
-      userData.longitude = 0;
-      userData.latitude = 0;
+      userData.charge = parseFloat(charge);
     }
+
+
 
     // Create new user
     const user = new User(userData);
 
     await user.save();
+
+    // Create wallet for the new user
+    const walletResult = await createWallet(user._id);
+    if (!walletResult.success) {
+      console.error('Failed to create wallet for user:', user._id, walletResult.message);
+    }
 
     // Generate JWT token
     const token = jwt.sign(
@@ -59,8 +78,14 @@ const register = async (req, res) => {
         userType: user.userType,
         occupation: user.occupation,
         longitude: user.longitude,
-        latitude: user.latitude
-      }
+        latitude: user.latitude,
+        charge: user.charge
+      },
+      wallet: walletResult.success ? {
+        id: walletResult.wallet._id,
+        balance: walletResult.wallet.balance,
+        currency: walletResult.wallet.currency
+      } : null
     });
 
   } catch (error) {
@@ -86,6 +111,10 @@ const login = async (req, res) => {
       return res.status(400).json({ message: 'Invalid credentials' });
     }
 
+    // Get user's wallet
+    const { getUserWallet } = require('./walletController');
+    const walletResult = await getUserWallet(user._id);
+
     // Generate JWT token
     const token = jwt.sign(
       { userId: user._id, userType: user.userType },
@@ -104,8 +133,14 @@ const login = async (req, res) => {
         userType: user.userType,
         occupation: user.occupation,
         longitude: user.longitude,
-        latitude: user.latitude
-      }
+        latitude: user.latitude,
+        charge: user.charge
+      },
+      wallet: walletResult.success ? {
+        id: walletResult.wallet._id,
+        balance: walletResult.wallet.balance,
+        currency: walletResult.wallet.currency
+      } : null
     });
 
   } catch (error) {
@@ -122,7 +157,7 @@ const updateProfile = async (req, res) => {
     console.log('Request body:', req.body);
     
     const userId = req.user.userId;
-    const { name, email, phone, password, longitude, latitude } = req.body;
+    const { name, email, phone, password, longitude, latitude, charge } = req.body;
 
     // Find user by ID
     const user = await User.findById(userId);
@@ -145,10 +180,13 @@ const updateProfile = async (req, res) => {
     user.email = email || user.email;
     user.phone = phone || user.phone;
 
-    // Update location for service providers
+    // Update location for all users
+    if (longitude !== undefined) user.longitude = longitude;
+    if (latitude !== undefined) user.latitude = latitude;
+
+    // Update charge for service providers
     if (user.userType === 'service provider') {
-      if (longitude !== undefined) user.longitude = longitude;
-      if (latitude !== undefined) user.latitude = latitude;
+      if (charge !== undefined && parseFloat(charge) >= 0) user.charge = parseFloat(charge);
     }
 
     // Update password if provided
@@ -168,7 +206,8 @@ const updateProfile = async (req, res) => {
         userType: user.userType,
         occupation: user.occupation,
         longitude: user.longitude,
-        latitude: user.latitude
+        latitude: user.latitude,
+        charge: user.charge
       }
     });
 
@@ -203,7 +242,7 @@ const searchServiceProviders = async (req, res) => {
 
     // Search for service providers
     const serviceProviders = await User.find(searchQuery)
-      .select('_id name occupation longitude latitude phone')
+      .select('_id name occupation longitude latitude phone charge')
       .sort({ name: 1 }); // Sort by name alphabetically
 
     // Transform _id to id for frontend compatibility
@@ -213,7 +252,8 @@ const searchServiceProviders = async (req, res) => {
       occupation: provider.occupation,
       longitude: provider.longitude,
       latitude: provider.latitude,
-      phone: provider.phone
+      phone: provider.phone,
+      charge: provider.charge
     }));
 
     console.log('=== Service Provider Search Debug ===');
@@ -237,7 +277,7 @@ const searchServiceProviders = async (req, res) => {
 // Test endpoint to check all users
 const getAllUsers = async (req, res) => {
   try {
-    const allUsers = await User.find({}).select('_id name email userType occupation');
+    const allUsers = await User.find({}).select('_id name email userType occupation charge');
     
     // Transform _id to id for frontend compatibility
     const transformedUsers = allUsers.map(user => ({
@@ -245,7 +285,8 @@ const getAllUsers = async (req, res) => {
       name: user.name,
       email: user.email,
       userType: user.userType,
-      occupation: user.occupation
+      occupation: user.occupation,
+      charge: user.charge
     }));
     
     console.log('All users in database:', allUsers.length);
@@ -275,7 +316,7 @@ const getUserById = async (req, res) => {
       });
     }
 
-    const user = await User.findById(userId).select('_id name email userType occupation phone');
+    const user = await User.findById(userId).select('_id name email userType occupation phone charge');
     
     if (!user) {
       return res.status(404).json({ 
@@ -293,7 +334,8 @@ const getUserById = async (req, res) => {
         email: user.email,
         userType: user.userType,
         occupation: user.occupation,
-        phone: user.phone
+        phone: user.phone,
+        charge: user.charge
       }
     });
 

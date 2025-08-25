@@ -3,6 +3,10 @@
   display: flex;
   height: calc(100vh - 56px); /* Subtract navbar height */
   width: 100%;
+  position: relative;
+  overflow: hidden;
+  /* Prevent any layout issues */
+  isolation: isolate;
 }
 
 /* Sidebar Styles */
@@ -14,9 +18,21 @@
   border-right: 1px solid #dee2e6;
   padding: 20px;
   overflow-y: auto;
+  overflow-x: hidden;
   box-shadow: 2px 0 5px rgba(0,0,0,0.1);
   position: relative;
   transition: width 0.1s ease;
+  /* Hide scrollbar for webkit browsers */
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE and Edge */
+  /* Prevent mirroring */
+  z-index: 1;
+  left: 0;
+}
+
+/* Hide scrollbar for webkit browsers */
+.sidebar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Resize Handle */
@@ -30,6 +46,9 @@
   cursor: col-resize;
   z-index: 10;
   transition: background-color 0.2s ease;
+  /* Prevent any mirroring effects */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .sidebar-resize-handle:hover,
@@ -125,6 +144,10 @@
   min-width: 50px;
   padding: 10px 5px;
   overflow: hidden;
+  /* Ensure proper positioning when collapsed */
+  position: relative;
+  z-index: 1;
+  left: 0;
 }
 
 .sidebar.collapsed .sidebar-content {
@@ -139,6 +162,11 @@
 /* Sidebar Content Wrapper */
 .sidebar-content {
   transition: opacity 0.3s ease;
+  position: relative;
+  z-index: 2;
+  /* Prevent any mirroring or duplication */
+  transform: translateZ(0);
+  backface-visibility: hidden;
 }
 
 .sidebar h3 {
@@ -149,23 +177,58 @@
 }
 
 .search-container {
+  position: relative;
   margin-bottom: 20px;
+}
+
+.search-input-group {
+  display: flex;
+  align-items: center;
   position: relative;
 }
 
 .search-input {
-  width: 100%;
-  padding: 10px 15px;
+  flex: 1;
+  padding: 12px 45px 12px 15px;
   border: 2px solid #e9ecef;
-  border-radius: 8px;
+  border-radius: 25px;
   font-size: 14px;
-  transition: border-color 0.3s ease;
+  transition: all 0.3s ease;
+  background: white;
 }
 
 .search-input:focus {
   outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 3px rgba(0,123,255,0.1);
+  border-color: #667eea;
+  box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.search-button {
+  position: absolute;
+  right: 5px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border: none;
+  border-radius: 50%;
+  width: 35px;
+  height: 35px;
+  color: white;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.search-button:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateY(-50%) scale(1.1);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.search-button:active {
+  transform: translateY(-50%) scale(0.95);
 }
 
 .search-suggestions {
@@ -200,6 +263,51 @@
   border-bottom: none;
 }
 
+.occupation-suggestion {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+  border-radius: 6px;
+  margin: 2px 0;
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.occupation-suggestion:hover {
+  background: linear-gradient(135deg, #764ba2 0%, #667eea 100%);
+  transform: translateX(5px);
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+}
+
+.occupation-suggestion strong {
+  color: white;
+  font-weight: 600;
+}
+
+.occupation-suggestion small {
+  color: rgba(255, 255, 255, 0.8);
+}
+
+.occupation-suggestion i {
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.provider-suggestions-indicator {
+  margin-top: 8px;
+  text-align: center;
+}
+
+.provider-suggestions-indicator .btn {
+  font-size: 12px;
+  padding: 6px 12px;
+  border-radius: 15px;
+  transition: all 0.3s ease;
+}
+
+.provider-suggestions-indicator .btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
 .suggestion-info {
   flex: 1;
   cursor: pointer;
@@ -219,6 +327,8 @@
 .map-area {
   width: 80%;
   position: relative;
+  z-index: 0;
+  flex: 1;
 }
 
 .leaflet-container {
@@ -344,4 +454,461 @@
 
 .provider-item .btn i {
   margin-right: 4px;
+}
+
+.provider-rating-charge {
+  display: flex;
+  align-items: center;
+  margin-top: 4px;
+  gap: 8px;
+}
+
+.provider-rating-charge small {
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+}
+
+.provider-rating-charge i {
+  margin-right: 2px;
+  font-size: 10px;
+}
+
+/* Favorites List Styles */
+.favorites-list {
+  max-height: 300px;
+  overflow-y: auto;
+  border: 1px solid #dee2e6;
+  border-radius: 8px;
+  background: white;
+}
+
+.favorite-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 15px;
+  border-bottom: 1px solid #f8f9fa;
+  transition: background-color 0.2s ease;
+}
+
+.favorite-item:hover {
+  background-color: #f8f9fa;
+}
+
+.favorite-item:last-child {
+  border-bottom: none;
+}
+
+.favorite-info {
+  flex: 1;
+}
+
+.favorite-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.favorite-actions .btn {
+  font-size: 12px;
+  padding: 4px 8px;
 } 
+
+/* Marker Info Cards */
+.custom-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+
+.custom-marker-icon .marker-info-card {
+  position: relative;
+  background: linear-gradient(135deg, #ffffff 0%, #f8f9ff 100%);
+  border-radius: 16px;
+  box-shadow: 0 8px 32px rgba(128, 90, 213, 0.15), 0 4px 16px rgba(128, 90, 213, 0.1);
+  padding: 12px 16px;
+  min-width: 140px;
+  max-width: 160px;
+  border: none;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  transform: translateY(-8px);
+  backdrop-filter: blur(10px);
+  cursor: pointer;
+  transition: all 0.3s ease;
+}
+
+.custom-marker-icon .marker-info-card::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #ffffff;
+  filter: drop-shadow(0 2px 4px rgba(128, 90, 213, 0.2));
+}
+
+.marker-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid rgba(128, 90, 213, 0.15);
+}
+
+.marker-name {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  flex: 1;
+  line-height: 1.2;
+}
+
+.marker-rating {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  padding: 4px 8px;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.marker-rating i {
+  font-size: 16px;
+  color: #ffffff;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.3));
+}
+
+.rating-number {
+  font-size: 14px;
+  font-weight: 700;
+  color: #ffffff;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+}
+
+.marker-card-body {
+  font-size: 11px;
+}
+
+.marker-occupation {
+  margin: 0;
+  color: #636e72;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}
+
+.marker-occupation i {
+  color: #0984e3;
+  font-size: 10px;
+  margin-right: 4px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+}
+
+.marker-charge {
+  margin: 4px 0 0 0;
+  color: #27ae60;
+  display: flex;
+  align-items: center;
+  font-size: 11px;
+  line-height: 1.2;
+  background: linear-gradient(135deg, #c084fc 0%, #a78bfa 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+  font-weight: 600;
+}
+
+.marker-charge i {
+  color: #27ae60;
+  font-size: 10px;
+  margin-right: 4px;
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.1));
+}
+
+/* Marker Card Actions - Removed route button */
+.marker-card-actions {
+  display: none;
+}
+
+/* Hover effect for marker cards */
+.custom-marker-icon .marker-info-card:hover {
+  transform: translateY(-12px);
+  box-shadow: 0 12px 40px rgba(128, 90, 213, 0.3), 0 6px 20px rgba(128, 90, 213, 0.2);
+  background: linear-gradient(135deg, #ffffff 0%, #f3f4f6 100%);
+  transition: all 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+}
+
+/* Click effect for marker cards */
+.custom-marker-icon .marker-info-card:active {
+  transform: translateY(-8px) scale(0.98);
+  transition: all 0.1s ease;
+}
+
+.custom-marker-icon .marker-info-card:hover .marker-name {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.custom-marker-icon .marker-info-card:hover .marker-rating {
+  background: linear-gradient(135deg, #7c3aed 0%, #6d28d9 100%);
+  transform: scale(1.05);
+  box-shadow: 0 4px 12px rgba(124, 58, 237, 0.4);
+}
+
+.custom-marker-icon .marker-info-card:hover .marker-occupation {
+  background: linear-gradient(135deg, #8b5cf6 0%, #7c3aed 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.custom-marker-icon .marker-info-card:hover .marker-charge {
+  background: linear-gradient(135deg, #a78bfa 0%, #8b5cf6 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Ensure Bootstrap Icons display properly */
+.custom-marker-icon .bi {
+  font-family: "bootstrap-icons" !important;
+  font-style: normal;
+  font-weight: normal !important;
+  font-variant: normal;
+  text-transform: none;
+  line-height: 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .custom-marker-icon .marker-info-card {
+    min-width: 120px;
+    max-width: 140px;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+  
+  .marker-name {
+    font-size: 14px;
+  }
+  
+  .marker-rating {
+    padding: 3px 6px;
+    border-radius: 10px;
+  }
+  
+  .marker-rating i {
+    font-size: 14px;
+  }
+  
+  .rating-number {
+    font-size: 12px;
+  }
+  
+  .marker-occupation {
+    font-size: 10px;
+  }
+  
+  .marker-occupation i {
+    font-size: 9px;
+  }
+  
+  .marker-charge {
+    font-size: 9px;
+  }
+  
+  .marker-charge i {
+    font-size: 8px;
+  }
+}
+
+/* User Location Marker Styles */
+.user-location-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.user-marker-info {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  border-radius: 20px;
+  padding: 14px;
+  box-shadow: 0 8px 32px rgba(139, 92, 246, 0.3);
+  border: none;
+  min-width: 160px;
+  text-align: center;
+  position: relative;
+}
+
+.user-marker-info::before {
+  content: '';
+  position: absolute;
+  bottom: -8px;
+  left: 50%;
+  transform: translateX(-50%);
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #8b5cf6;
+}
+
+.user-marker-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.user-marker-name {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: white;
+}
+
+.user-marker-icon {
+  font-size: 1.2rem;
+  color: #f3e8ff;
+}
+
+.user-marker-body {
+  margin: 0;
+}
+
+.user-marker-address {
+  margin: 0;
+  font-size: 0.8rem;
+  color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+}
+
+/* Responsive adjustments for user marker */
+@media (max-width: 768px) {
+  .user-marker-info {
+    min-width: 120px;
+    max-width: 140px;
+    padding: 8px 12px;
+    border-radius: 6px;
+  }
+  
+  .user-marker-name {
+    font-size: 14px;
+  }
+  
+  .user-marker-icon {
+    font-size: 1rem;
+  }
+  
+  .user-marker-address {
+    font-size: 10px;
+  }
+}
+
+/* Route Information Styles */
+.route-info-section {
+  background: linear-gradient(135deg, #f3e8ff, #e9d5ff);
+  border: 1px solid #8b5cf6;
+  border-radius: 16px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 4px 15px rgba(139, 92, 246, 0.2);
+}
+
+.route-info-section h5 {
+  color: #7c3aed;
+  margin-bottom: 15px;
+  font-weight: 600;
+}
+
+.route-details {
+  color: #6b21a8;
+}
+
+.provider-route-info {
+  background: rgba(255, 255, 255, 0.7);
+  padding: 12px;
+  border-radius: 12px;
+  border-left: 4px solid #8b5cf6;
+}
+
+.distance-info {
+  background: rgba(255, 255, 255, 0.5);
+  padding: 15px;
+  border-radius: 12px;
+  border: 1px solid rgba(139, 92, 246, 0.3);
+}
+
+.distance-badge {
+  background: linear-gradient(135deg, #8b5cf6, #7c3aed);
+  color: white;
+  padding: 8px 12px;
+  border-radius: 20px;
+  text-align: center;
+  font-size: 14px;
+  box-shadow: 0 2px 8px rgba(139, 92, 246, 0.3);
+}
+
+.estimated-time {
+  text-align: center;
+  color: #6c757d;
+}
+
+.route-info-section .btn {
+  width: 100%;
+  border-color: #8b5cf6;
+  color: #7c3aed;
+  transition: all 0.3s ease;
+}
+
+.route-info-section .btn:hover {
+  background-color: #8b5cf6;
+  border-color: #8b5cf6;
+  color: #ffffff;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(139, 92, 246, 0.4);
+}
+
+/* Estimated route styling */
+.route-info-section .badge {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+}
+
+.route-info-section .alert {
+  font-size: 0.8rem;
+  padding: 8px 12px;
+  margin: 0;
+}
+
+/* Spinning animation for loading */
+.spin {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}

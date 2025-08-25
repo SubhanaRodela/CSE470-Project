@@ -69,28 +69,8 @@ const createReview = async (req, res) => {
       });
     }
 
-    // Check if user already reviewed this service provider (for main reviews only)
-    if (!parentReviewId) {
-      console.log('Checking for existing review with:', {
-        user: userId,
-        serviceProvider: serviceProviderId
-      });
-      
-      const existingReview = await Review.findOne({
-        user: userId,
-        serviceProvider: serviceProviderId,
-        parentReview: null
-      });
-
-      console.log('Existing review found:', existingReview);
-
-      if (existingReview) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'You have already reviewed this service provider' 
-        });
-      }
-    }
+    // Users can now post multiple reviews for the same service provider
+    // This allows for ongoing feedback and multiple experiences
 
     const reviewData = {
       user: userId,

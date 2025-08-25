@@ -1,5 +1,6 @@
 const Booking = require('../models/Booking');
 const User = require('../models/User');
+const { updateWalletBalance } = require('./walletController');
 
 // Create a new booking
 const createBooking = async (req, res) => {
@@ -57,7 +58,8 @@ const createBooking = async (req, res) => {
       serviceProvider: serviceProviderId,
       title,
       description,
-      bookingDate: parsedDate
+      bookingDate: parsedDate,
+      charge: serviceProvider.charge || 0
     });
 
     await booking.save();
@@ -162,6 +164,37 @@ const updateBookingStatus = async (req, res) => {
         success: false, 
         message: 'Access denied. You can only update your own bookings.' 
       });
+    }
+
+    // If status is being changed to 'confirmed', add the charge to service provider's wallet
+    if (status === 'confirmed' && booking.status !== 'confirmed') {
+      try {
+        // Validate that booking has a valid charge
+        if (!booking.charge || isNaN(booking.charge) || booking.charge <= 0) {
+          console.error(`❌ Invalid charge amount for booking ${bookingId}: ${booking.charge}`);
+          return res.status(400).json({
+            success: false,
+            message: 'Cannot confirm booking: Invalid charge amount'
+          });
+        }
+
+        const walletResult = await updateWalletBalance(serviceProviderId, booking.charge, 'add');
+        if (walletResult.success) {
+          console.log(`✅ Added $${booking.charge} to service provider ${serviceProviderId}'s wallet`);
+        } else {
+          console.error(`❌ Failed to update wallet for service provider ${serviceProviderId}:`, walletResult.message);
+          return res.status(500).json({
+            success: false,
+            message: 'Failed to update wallet balance'
+          });
+        }
+      } catch (walletError) {
+        console.error('❌ Error updating wallet:', walletError);
+        return res.status(500).json({
+          success: false,
+          message: 'Error updating wallet balance'
+        });
+      }
     }
 
     booking.status = status;

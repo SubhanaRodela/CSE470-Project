@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import '../styles/Chatbox.css';
+import Navbar from './navbar';
 
 const Chatbox = () => {
   const navigate = useNavigate();
@@ -24,9 +25,6 @@ const Chatbox = () => {
   const pollingIntervalRef = useRef(null);
   const [newMessageCount, setNewMessageCount] = useState(0);
   const [showNewMessageIndicator, setShowNewMessageIndicator] = useState(false);
-  const [isTyping, setIsTyping] = useState(false);
-  const [otherUserTyping, setOtherUserTyping] = useState(false);
-  const [audioEnabled, setAudioEnabled] = useState(true);
 
   // Get provider ID or sender ID from URL params if navigating from provider list or message notification
   const providerId = searchParams.get('providerId');
@@ -57,7 +55,7 @@ const Chatbox = () => {
     if (senderId) {
       openChatWithSender(senderId, senderName);
     }
-  }, [navigate, providerId]);
+  }, [navigate, providerId, senderId, senderName]);
 
   useEffect(() => {
     // Filter conversations based on search query
@@ -110,7 +108,7 @@ const Chatbox = () => {
       if (selectedConversation) {
         await pollForNewMessages();
       }
-    }, 3000); // Poll every 3 seconds
+    }, 2000); // Poll every 2 seconds for more responsive feel
   };
 
   // Stop real-time message polling
@@ -139,21 +137,6 @@ const Chatbox = () => {
     }
   };
 
-  // Play notification sound
-  const playNotificationSound = () => {
-    if (!audioEnabled) return;
-    
-    try {
-      const audio = new Audio('data:audio/wav;base64,UklGRnoGAABXQVZFZm10IBAAAAABAAEAQB8AAEAfAAABAAgAZGF0YQoGAACBhYqFbF1fdJivrJBhNjVgodDbq2EcBj+a2/LDciUFLIHO8tiJNwgZaLvt559NEAxQp+PwtmMcBjiR1/LMeSwFJHfH8N2QQAoUXrTp66hVFApGn+DyvmwhBSuBzvLZiTYIG2m98OScTgwOUarm7blmGgU7k9n1unEiBC13yO/eizEIHWq+8+OWT');
-      audio.volume = 0.3;
-      audio.play().catch(() => {
-        // Ignore audio play errors
-      });
-    } catch (error) {
-      // Ignore audio errors
-    }
-  };
-
   // Poll for new messages without visual interruption
   const pollForNewMessages = async () => {
     try {
@@ -178,39 +161,34 @@ const Chatbox = () => {
           setNewMessageCount(newMessageCount);
           setShowNewMessageIndicator(true);
           
-          // Play notification sound
-          playNotificationSound();
-          
           // Hide indicator after 2 seconds
           setTimeout(() => {
             setShowNewMessageIndicator(false);
             setNewMessageCount(0);
           }, 2000);
           
-                  // Update messages
-        setMessages(newMessages);
-        
-        // Mark new messages as read
-        await markMessagesAsRead();
-        
-        // Highlight new messages briefly
-        const newMessageElements = document.querySelectorAll('.message.received');
-        newMessageElements.forEach((element, index) => {
-          if (index >= messages.length) {
-            element.classList.add('new-message-highlight');
-            setTimeout(() => {
-              element.classList.remove('new-message-highlight');
-            }, 3000);
-          }
-        });
-        
-        // Update conversations list to reflect new messages
-        await loadConversations();
+          // Update messages
+          setMessages(newMessages);
+          
+          // Mark new messages as read
+          await markMessagesAsRead();
+          
+          // Update conversations list to reflect new messages
+          await loadConversations();
+          
+          // Refresh navbar unread count
+          refreshNavbarUnreadCount();
         }
       }
     } catch (error) {
       // Silently handle errors to avoid disrupting user experience
     }
+  };
+
+  // Function to refresh navbar unread count
+  const refreshNavbarUnreadCount = () => {
+    // Dispatch custom event to notify navbar
+    window.dispatchEvent(new CustomEvent('refreshUnreadCount'));
   };
 
   const loadConversations = async () => {
@@ -350,13 +328,6 @@ const Chatbox = () => {
     
     if (!newMessage.trim() || !selectedConversation) return;
 
-    console.log('Sending message:', {
-      content: newMessage.trim(),
-      receiverId: selectedConversation.otherUser.id,
-      user: user,
-      selectedConversation: selectedConversation
-    });
-
     try {
       setSending(true);
       const token = localStorage.getItem('token');
@@ -374,7 +345,6 @@ const Chatbox = () => {
 
       if (response.ok) {
         const data = await response.json();
-        console.log('Message sent successfully:', data);
         
         // Add new message to the list immediately for instant feedback
         const messageObj = {
@@ -386,7 +356,6 @@ const Chatbox = () => {
           isRead: false
         };
         
-        console.log('Created message object:', messageObj);
         setMessages(prev => [...prev, messageObj]);
         setNewMessage('');
         
@@ -398,6 +367,9 @@ const Chatbox = () => {
         
         // Focus input for next message
         inputRef.current?.focus();
+        
+        // Refresh navbar unread count
+        refreshNavbarUnreadCount();
       } else {
         const errorData = await response.json();
         console.error('Failed to send message:', errorData);
@@ -406,6 +378,13 @@ const Chatbox = () => {
       console.error('Error sending message:', error);
     } finally {
       setSending(false);
+    }
+  };
+
+  const handleKeyPress = (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      sendMessage(e);
     }
   };
 
@@ -430,19 +409,25 @@ const Chatbox = () => {
     setMessages([]);
   };
 
+  // Helper function to determine if message is from current user
+  const isOwnMessage = (message) => {
+    return message.sender._id === user.id;
+  };
+
   if (!user) {
     return <div className="chatbox-loading">Loading...</div>;
   }
 
   return (
     <div className="chatbox-container">
+      <Navbar />
       <div className="chatbox-header">
         <div className="chatbox-header-content">
           <button 
             className="back-button"
             onClick={() => navigate(-1)}
           >
-            <i className="bi bi-arrow-left"></i>
+            ←
           </button>
           <h2>Messages</h2>
         </div>
@@ -454,7 +439,6 @@ const Chatbox = () => {
           <div className="conversations-view">
             <div className="search-container">
               <div className="search-input-wrapper">
-                <i className="bi bi-search search-icon"></i>
                 <input
                   type="text"
                   placeholder="Search conversations..."
@@ -479,7 +463,7 @@ const Chatbox = () => {
                     onClick={() => handleConversationClick(conversation)}
                   >
                     <div className="conversation-avatar">
-                      <i className="bi bi-person-circle"></i>
+                      {conversation.otherUser.name.charAt(0).toUpperCase()}
                     </div>
                     <div className="conversation-content">
                       <div className="conversation-header">
@@ -502,7 +486,6 @@ const Chatbox = () => {
                 ))
               ) : (
                 <div className="no-conversations">
-                  <i className="bi bi-chat-dots"></i>
                   <h3>No conversations yet</h3>
                   <p>Start chatting with service providers to see your conversations here.</p>
                 </div>
@@ -517,32 +500,16 @@ const Chatbox = () => {
                 className="back-to-conversations"
                 onClick={handleBackToConversations}
               >
-                <i className="bi bi-arrow-left"></i>
+                ←
               </button>
               <div className="chat-user-info">
                 <div className="chat-user-avatar">
-                  <i className="bi bi-person-circle"></i>
+                  {selectedConversation.otherUser.name.charAt(0).toUpperCase()}
                 </div>
                 <div>
                   <h4>{selectedConversation.otherUser.name}</h4>
                   <small>{selectedConversation.otherUser.userType}</small>
-                  <div className="online-indicator">
-                    <span className="online-dot"></span>
-                    <span className="online-text">online</span>
-                    <span className="last-seen">last seen just now</span>
-                  </div>
                 </div>
-                                  <button
-                    className={`audio-toggle ${audioEnabled ? 'enabled' : 'disabled'}`}
-                    onClick={() => setAudioEnabled(!audioEnabled)}
-                    title={audioEnabled ? 'Disable sound notifications' : 'Enable sound notifications'}
-                  >
-                    <i className={`bi ${audioEnabled ? 'bi-volume-up' : 'bi-volume-mute'}`}></i>
-                  </button>
-                  <div className="connection-status">
-                    <span className="status-dot connected"></span>
-                    <span className="status-text">connected</span>
-                  </div>
               </div>
             </div>
 
@@ -550,56 +517,29 @@ const Chatbox = () => {
               {/* New Message Indicator */}
               {showNewMessageIndicator && (
                 <div className="new-message-indicator">
-                  <i className="bi bi-arrow-down"></i>
-                  <span>{newMessageCount} new message{newMessageCount > 1 ? 's' : ''}</span>
+                  <span>↓ {newMessageCount} new message{newMessageCount > 1 ? 's' : ''}</span>
                 </div>
               )}
               
               {messages.length > 0 ? (
-                messages.map((message) => {
-                                    console.log('Message debug:', {
-                    messageId: message._id,
-                    senderId: message.sender._id,
-                    userId: user.id,
-                    isSent: message.sender._id === user.id,
-                    senderName: message.sender.name
-                  });
-                  return (
-                    <div
-                      key={message._id}
-                      className={`message ${message.sender._id === user.id ? 'sent' : 'received'} ${message._id === 'temp' ? 'sending' : ''}`}
-                    >
-                      <div className="message-content">
-                        <p>{message.content}</p>
-                        <div className="message-footer">
-                          <span className="message-time">
-                            {formatTime(message.createdAt)}
-                          </span>
-                          {message.sender._id === user.id && (
-                            <span className="message-status">
-                              <i className="bi bi-check2-all"></i>
-                            </span>
-                          )}
-                        </div>
+                messages.map((message) => (
+                  <div
+                    key={message._id}
+                    className={`message ${isOwnMessage(message) ? 'sent' : 'received'} ${message._id === 'temp' ? 'sending' : ''}`}
+                  >
+                    <div className="message-content">
+                      <p>{message.content}</p>
+                      <div className="message-footer">
+                        <span className="message-time">
+                          {formatTime(message.createdAt)}
+                        </span>
                       </div>
                     </div>
-                  );
-                })
+                  </div>
+                ))
               ) : (
                 <div className="no-messages">
-                  <i className="bi bi-chat-dots"></i>
                   <p>No messages yet. Start the conversation!</p>
-                </div>
-              )}
-              {/* Typing Indicator */}
-              {otherUserTyping && (
-                <div className="typing-indicator">
-                  <div className="typing-dots">
-                    <span></span>
-                    <span></span>
-                    <span></span>
-                  </div>
-                  <span className="typing-text">typing...</span>
                 </div>
               )}
               <div ref={messagesEndRef} />
@@ -612,19 +552,8 @@ const Chatbox = () => {
                   type="text"
                   placeholder="Type your message..."
                   value={newMessage}
-                  onChange={(e) => {
-                    setNewMessage(e.target.value);
-                    if (e.target.value.trim()) {
-                      setIsTyping(true);
-                      // Simulate typing indicator for other user
-                      setTimeout(() => setOtherUserTyping(true), 1000);
-                      setTimeout(() => setOtherUserTyping(false), 3000);
-                    } else {
-                      setIsTyping(false);
-                    }
-                  }}
-                  onFocus={() => setIsTyping(true)}
-                  onBlur={() => setIsTyping(false)}
+                  onChange={(e) => setNewMessage(e.target.value)}
+                  onKeyPress={handleKeyPress}
                   className="message-input"
                   disabled={sending}
                 />
@@ -636,7 +565,10 @@ const Chatbox = () => {
                   {sending ? (
                     <div className="spinner-small"></div>
                   ) : (
-                    <i className="bi bi-send"></i>
+                    <svg className="send-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                      <path d="M22 2L11 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                      <path d="M22 2L15 22L11 13L2 9L22 2Z" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"/>
+                    </svg>
                   )}
                 </button>
               </div>

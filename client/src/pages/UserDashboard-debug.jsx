@@ -6,6 +6,7 @@ import 'leaflet/dist/leaflet.css';
 import '../styles/Dashboard.css';
 import '../styles/Map.css';
 import ReviewModal from '../components/ReviewModal';
+import Navbar from './navbar';
 
 // Fix for default markers in react-leaflet
 delete L.Icon.Default.prototype._getIconUrl;
@@ -228,34 +229,9 @@ const UserDashboardDebug = () => {
 
   return (
     <div className="dashboard-container">
+      <Navbar />
       <div className="container-fluid">
-        <div className="row">
-          <div className="col-12">
-            <nav className="navbar navbar-expand-lg navbar-dark bg-primary">
-              <div className="container-fluid">
-                <span className="navbar-brand">Rodela - DEBUG MODE</span>
-                <div className="navbar-nav ms-auto">
-                  <button 
-                    className="btn btn-outline-light me-2"
-                    onClick={() => navigate('/profile')}
-                  >
-                    Profile
-                  </button>
-                  <button 
-                    className="btn btn-outline-light"
-                    onClick={() => {
-                      localStorage.removeItem('token');
-                      localStorage.removeItem('user');
-                      navigate('/');
-                    }}
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </nav>
-          </div>
-        </div>
+        
 
         <div className="map-container">
           {/* Sidebar */}

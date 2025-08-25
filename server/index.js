@@ -8,6 +8,10 @@ const reviewRoutes = require('./routes/reviews');
 const favoriteRoutes = require('./routes/favorites');
 const chatRoutes = require('./routes/chat');
 const bookingRoutes = require('./routes/bookings');
+const walletRoutes = require('./routes/wallets');
+const recentMessageRoutes = require('./routes/recentMessages');
+const qpayRoutes = require('./routes/qpay');
+const transactionRoutes = require('./routes/transactions');
 
 const app = express();
 
@@ -39,6 +43,10 @@ app.use('/api/reviews', reviewRoutes);
 app.use('/api/favorites', favoriteRoutes);
 app.use('/api/chat', chatRoutes);
 app.use('/api/bookings', bookingRoutes);
+app.use('/api/wallets', walletRoutes);
+app.use('/api/recent-messages', recentMessageRoutes);
+app.use('/api/qpay', qpayRoutes);
+app.use('/api/transactions', transactionRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

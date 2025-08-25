@@ -65,6 +65,19 @@ const userSchema = new mongoose.Schema({
     required: function() {
       return this.userType === 'service provider';
     }
+  },
+  charge: {
+    type: Number,
+    required: function() {
+      return this.userType === 'service provider';
+    },
+    min: 0,
+    validate: {
+      validator: function(value) {
+        return value >= 0;
+      },
+      message: 'Charge must be a non-negative number'
+    }
   }
 }, {
   timestamps: true
@@ -98,7 +111,8 @@ async function createTestProviders() {
         userType: 'service provider',
         password: 'password123',
         longitude: -74.0060,
-        latitude: 40.7128
+        latitude: 40.7128,
+        charge: 75
       },
       {
         name: 'Sarah Johnson',
@@ -108,7 +122,8 @@ async function createTestProviders() {
         userType: 'service provider',
         password: 'password123',
         longitude: -74.0061,
-        latitude: 40.7129
+        latitude: 40.7129,
+        charge: 85
       },
       {
         name: 'Mike Wilson',
@@ -118,7 +133,8 @@ async function createTestProviders() {
         userType: 'service provider',
         password: 'password123',
         longitude: -74.0062,
-        latitude: 40.7130
+        latitude: 40.7130,
+        charge: 60
       },
       {
         name: 'Lisa Brown',
@@ -128,7 +144,8 @@ async function createTestProviders() {
         userType: 'service provider',
         password: 'password123',
         longitude: -74.0063,
-        latitude: 40.7131
+        latitude: 40.7131,
+        charge: 45
       },
       {
         name: 'David Lee',
@@ -138,7 +155,8 @@ async function createTestProviders() {
         userType: 'service provider',
         password: 'password123',
         longitude: -74.0064,
-        latitude: 40.7132
+        latitude: 40.7132,
+        charge: 95
       }
     ];
 

@@ -95,6 +95,11 @@ const BookingModal = ({ isOpen, onClose, serviceProvider, onBookingSuccess }) =>
           <div className="provider-info mb-3">
             <h5>Service Provider: {serviceProvider.name}</h5>
             <p className="text-muted mb-0">Occupation: {serviceProvider.occupation}</p>
+            {serviceProvider.charge && (
+              <p className="text-success mb-0">
+                <strong>Service Charge:</strong> ${serviceProvider.charge}
+              </p>
+            )}
           </div>
 
           <form onSubmit={handleSubmit}>

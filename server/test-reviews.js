@@ -53,34 +53,67 @@ async function testReviewSystem() {
       });
     }
 
-    // Test creating a sample review if we have users and service providers
+    // Test creating multiple reviews for the same service provider by the same user
     if (users.length > 0 && serviceProviders.length > 0) {
       const regularUser = users.find(u => u.userType === 'user');
       const serviceProvider = serviceProviders[0];
 
       if (regularUser && serviceProvider) {
-        console.log('\n➕ Creating a sample review...');
+        console.log('\n➕ Testing multiple reviews by same user...');
         
-        const sampleReview = new Review({
+        // Create first review
+        const firstReview = new Review({
           user: regularUser._id,
           serviceProvider: serviceProvider._id,
-          comment: 'This is a test review for testing purposes.',
+          comment: 'This is my first review for this service provider.',
           rating: 5
         });
 
-        await sampleReview.save();
-        console.log('✅ Sample review created successfully');
+        await firstReview.save();
+        console.log('✅ First review created successfully');
+        
+        // Create second review (this should now work!)
+        const secondReview = new Review({
+          user: regularUser._id,
+          serviceProvider: serviceProvider._id,
+          comment: 'This is my second review for the same service provider.',
+          rating: 4
+        });
+
+        await secondReview.save();
+        console.log('✅ Second review created successfully - Multiple reviews now allowed!');
+        
+        // Create third review to confirm
+        const thirdReview = new Review({
+          user: regularUser._id,
+          serviceProvider: serviceProvider._id,
+          comment: 'This is my third review - unlimited reviews confirmed!',
+          rating: 3
+        });
+
+        await thirdReview.save();
+        console.log('✅ Third review created successfully');
+        
+        // Verify all reviews exist
+        const allReviews = await Review.find({
+          user: regularUser._id,
+          serviceProvider: serviceProvider._id
+        });
+        console.log(`📊 Total reviews by this user for this provider: ${allReviews.length}`);
         
         // Clean up
-        await Review.findByIdAndDelete(sampleReview._id);
-        console.log('🧹 Sample review cleaned up');
+        await Review.findByIdAndDelete(firstReview._id);
+        await Review.findByIdAndDelete(secondReview._id);
+        await Review.findByIdAndDelete(thirdReview._id);
+        console.log('🧹 All test reviews cleaned up');
       }
     }
 
     console.log('\n✅ Review system test completed successfully!');
+    console.log('\n🎉 NEW FEATURE: Users can now post multiple reviews for the same service provider!');
     console.log('\n📋 Available API endpoints:');
     console.log('  GET  /api/reviews/service-provider/:id - Get reviews for a service provider');
-    console.log('  POST /api/reviews - Create a new review');
+    console.log('  POST /api/reviews - Create a new review (unlimited per user per provider)');
     console.log('  PUT  /api/reviews/:id - Update a review');
     console.log('  DELETE /api/reviews/:id - Delete a review');
     console.log('  POST /api/reviews/:id/like - Like a review');

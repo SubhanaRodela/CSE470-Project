@@ -49,14 +49,23 @@ const userSchema = new mongoose.Schema({
   },
   longitude: {
     type: Number,
-    required: function() {
-      return this.userType === 'service provider';
-    }
+    required: true
   },
   latitude: {
     type: Number,
+    required: true
+  },
+  charge: {
+    type: Number,
     required: function() {
       return this.userType === 'service provider';
+    },
+    min: 0,
+    validate: {
+      validator: function(value) {
+        return value >= 0;
+      },
+      message: 'Charge must be a non-negative number'
     }
   }
 }, {

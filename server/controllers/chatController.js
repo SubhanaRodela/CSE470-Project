@@ -1,5 +1,7 @@
 const Message = require('../models/Message');
+const StoreMessage = require('../models/StoreMessage');
 const User = require('../models/User');
+const RecentMessage = require('../models/RecentMessage');
 
 // Send a message
 const sendMessage = async (req, res) => {
@@ -46,6 +48,68 @@ const sendMessage = async (req, res) => {
     
     await message.save();
     console.log('SendMessage - Message saved successfully');
+
+    // Update or create StoreMessage for sender
+    await StoreMessage.findOneAndUpdate(
+      { userId: senderId, otherUserId: receiverId },
+      {
+        otherUserName: receiver.name,
+        otherUserType: receiver.userType,
+        lastMessage: {
+          content: content,
+          senderId: senderId,
+          timestamp: new Date()
+        },
+        conversationId: conversationId
+      },
+      { upsert: true, new: true }
+    );
+
+    // Update or create StoreMessage for receiver (with unread count)
+    await StoreMessage.findOneAndUpdate(
+      { userId: receiverId, otherUserId: senderId },
+      {
+        otherUserName: req.user.name,
+        otherUserType: req.user.userType,
+        lastMessage: {
+          content: content,
+          senderId: senderId,
+          timestamp: new Date()
+        },
+        $inc: { unreadCount: 1 },
+        conversationId: conversationId
+      },
+      { upsert: true, new: true }
+    );
+
+    // Update recent messages for both users
+    await RecentMessage.findOneAndUpdate(
+      { userId: senderId, providerId: receiverId },
+      {
+        lastMessage: {
+          content: content,
+          senderId: senderId,
+          timestamp: new Date()
+        },
+        conversationId: conversationId
+      },
+      { upsert: true, new: true }
+    );
+
+    // Update recent messages for the provider (receiver)
+    await RecentMessage.findOneAndUpdate(
+      { userId: receiverId, providerId: senderId },
+      {
+        lastMessage: {
+          content: content,
+          senderId: senderId,
+          timestamp: new Date()
+        },
+        $inc: { unreadCount: 1 },
+        conversationId: conversationId
+      },
+      { upsert: true, new: true }
+    );
 
     // Populate sender and receiver details
     await message.populate([
@@ -103,14 +167,34 @@ const getConversation = async (req, res) => {
       .sort({ createdAt: 1 });
 
     // Mark messages as read if they were sent to current user
-    await Message.updateMany(
-      { 
-        conversationId, 
-        receiver: currentUserId, 
-        isRead: false 
-      },
-      { isRead: true }
-    );
+    if (messages.length > 0) {
+      await Message.updateMany(
+        { 
+          conversationId, 
+          receiver: currentUserId, 
+          isRead: false 
+        },
+        { isRead: true }
+      );
+
+      // Reset unread count in StoreMessage
+      await StoreMessage.findOneAndUpdate(
+        { userId: currentUserId, otherUserId: otherUserId },
+        { unreadCount: 0 }
+      );
+
+      // Reset unread count in RecentMessage
+      await RecentMessage.updateMany(
+        { 
+          conversationId,
+          $or: [
+            { userId: currentUserId, providerId: otherUserId },
+            { userId: otherUserId, providerId: currentUserId }
+          ]
+        },
+        { unreadCount: 0 }
+      );
+    }
 
     res.json({
       success: true,
@@ -135,84 +219,40 @@ const getConversation = async (req, res) => {
   }
 };
 
-// Get all conversations for current user
+// Get all conversations for current user using StoreMessage
 const getUserConversations = async (req, res) => {
   try {
     const currentUserId = req.user.userId;
+    console.log('Getting conversations for user ID:', currentUserId);
+    console.log('User from token:', req.user);
 
-    // Get all conversations where user is either sender or receiver
-    const conversations = await Message.aggregate([
-      {
-        $match: {
-          $or: [
-            { sender: new require('mongoose').Types.ObjectId(currentUserId) },
-            { receiver: new require('mongoose').Types.ObjectId(currentUserId) }
-          ]
-        }
+    // Get all conversations from StoreMessage
+    const storeMessages = await StoreMessage.find({ userId: currentUserId })
+      .sort({ 'lastMessage.timestamp': -1 });
+
+    console.log('Found store messages:', storeMessages.length);
+
+    const conversations = storeMessages.map(storeMsg => ({
+      conversationId: storeMsg.conversationId,
+      otherUser: {
+        id: storeMsg.otherUserId,
+        name: storeMsg.otherUserName,
+        userType: storeMsg.otherUserType
       },
-      {
-        $group: {
-          _id: '$conversationId',
-          lastMessage: { $last: '$$ROOT' },
-          messageCount: { $sum: 1 },
-          unreadCount: {
-            $sum: {
-              $cond: [
-                { 
-                  $and: [
-                    { $eq: ['$receiver', new require('mongoose').Types.ObjectId(currentUserId)] },
-                    { $eq: ['$isRead', false] }
-                  ]
-                },
-                1,
-                0
-              ]
-            }
-          }
-        }
+      lastMessage: {
+        content: storeMsg.lastMessage.content,
+        createdAt: storeMsg.lastMessage.timestamp,
+        sender: storeMsg.lastMessage.senderId.toString() === currentUserId ? 'me' : 'other'
       },
-      {
-        $sort: { 'lastMessage.createdAt': -1 }
-      }
-    ]);
+      unreadCount: storeMsg.unreadCount
+    }));
 
-    // Populate user details for each conversation
-    const populatedConversations = await Promise.all(
-      conversations.map(async (conv) => {
-        const lastMessage = await Message.findById(conv.lastMessage._id)
-          .populate([
-            { path: 'sender', select: '_id name userType' },
-            { path: 'receiver', select: '_id name userType' }
-          ]);
-
-        // Determine the other user in the conversation
-        const otherUser = lastMessage.sender._id.toString() === currentUserId 
-          ? lastMessage.receiver 
-          : lastMessage.sender;
-
-        return {
-          conversationId: conv._id,
-          otherUser: {
-            id: otherUser._id,
-            name: otherUser.name,
-            userType: otherUser.userType
-          },
-          lastMessage: {
-            content: lastMessage.content,
-            messageType: lastMessage.messageType,
-            createdAt: lastMessage.createdAt,
-            sender: lastMessage.sender._id.toString() === currentUserId ? 'me' : 'other'
-          },
-          messageCount: conv.messageCount,
-          unreadCount: conv.unreadCount
-        };
-      })
-    );
+    console.log('Processed conversations:', conversations);
 
     res.json({
       success: true,
       message: 'Conversations retrieved successfully',
-      data: populatedConversations
+      data: conversations
     });
 
   } catch (error) {
@@ -227,10 +267,12 @@ const getUserConversations = async (req, res) => {
 // Mark messages as read
 const markAsRead = async (req, res) => {
   try {
-    const { conversationId } = req.params;
+    const { otherUserId } = req.params;
     const currentUserId = req.user.userId;
 
     // Mark all unread messages in this conversation as read
+    const conversationId = Message.generateConversationId(currentUserId, otherUserId);
+    
     const result = await Message.updateMany(
       { 
         conversationId, 
@@ -238,6 +280,24 @@ const markAsRead = async (req, res) => {
         isRead: false 
       },
       { isRead: true }
+    );
+
+    // Reset unread count in StoreMessage
+    await StoreMessage.findOneAndUpdate(
+      { userId: currentUserId, otherUserId: otherUserId },
+      { unreadCount: 0 }
+    );
+
+    // Reset unread count in RecentMessage
+    await RecentMessage.updateMany(
+      { 
+        conversationId,
+        $or: [
+          { userId: currentUserId, providerId: otherUserId },
+          { userId: otherUserId, providerId: currentUserId }
+        ]
+      },
+      { unreadCount: 0 }
     );
 
     res.json({
@@ -251,6 +311,37 @@ const markAsRead = async (req, res) => {
     res.status(500).json({ 
       success: false, 
       message: 'Server error while marking messages as read' 
+    });
+  }
+};
+
+// Get unread messages count for current user
+const getUnreadCount = async (req, res) => {
+  try {
+    const currentUserId = req.user.userId;
+    console.log('Getting unread count for user ID:', currentUserId);
+    console.log('User from token:', req.user);
+
+    // Get total unread count from StoreMessage
+    const totalUnread = await StoreMessage.aggregate([
+      { $match: { userId: new require('mongoose').Types.ObjectId(currentUserId) } },
+      { $group: { _id: null, totalUnread: { $sum: '$unreadCount' } } }
+    ]);
+
+    const unreadCount = totalUnread.length > 0 ? totalUnread[0].totalUnread : 0;
+    console.log('Total unread count:', unreadCount);
+
+    res.json({
+      success: true,
+      message: 'Unread count retrieved successfully',
+      data: { unreadCount }
+    });
+
+  } catch (error) {
+    console.error('Get unread count error:', error);
+    res.status(500).json({ 
+      success: false, 
+      message: 'Server error while retrieving unread count' 
     });
   }
 };
@@ -289,5 +380,6 @@ module.exports = {
   getConversation,
   getUserConversations,
   markAsRead,
+  getUnreadCount,
   getUnreadMessages
 };

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import '../styles/showProfile.css';
+import Navbar from './navbar';
 
 const ShowProfile = () => {
   const navigate = useNavigate();
@@ -141,6 +142,7 @@ const ShowProfile = () => {
 
   return (
     <div className="show-profile-overlay" onClick={handleClose}>
+      <Navbar />
       <div 
         className={`show-profile-card ${isVisible ? 'slide-in' : ''}`}
         onClick={(e) => e.stopPropagation()}

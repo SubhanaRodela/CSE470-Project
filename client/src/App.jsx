@@ -14,6 +14,12 @@ import AdminDashboard from './pages/AdminDashboard';
 import Profile from './pages/Profile';
 import Chatbox from './pages/chatbox';
 import ShowProfile from './pages/showProfile';
+import Orders from './pages/orders';
+import UserService from './pages/userService';
+import Pay from './pages/pay';
+import QPayReg from './pages/qpayreg';
+import QPay from './pages/qpay';
+import TransactionHistory from './pages/trhistory';
 
 function App() {
   return (
@@ -51,6 +57,12 @@ function App() {
           <Route path="/profile" element={<Profile />} />
           <Route path="/chatbox" element={<Chatbox />} />
           <Route path="/show-profile" element={<ShowProfile />} />
+          <Route path="/orders" element={<Orders />} />
+          <Route path="/user-service" element={<UserService />} />
+                  <Route path="/pay" element={<Pay />} />
+        <Route path="/qpayreg" element={<QPayReg />} />
+        <Route path="/qpay" element={<QPay />} />
+        <Route path="/transaction-history" element={<TransactionHistory />} />
         </Routes>
       </div>
     </Router>

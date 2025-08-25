@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import MessageNotification from '../components/MessageNotification';
 import '../styles/Dashboard.css';
+import Navbar from './navbar';
 
 const AdminDashboard = () => {
   const navigate = useNavigate();
@@ -37,25 +38,9 @@ const AdminDashboard = () => {
 
   return (
     <div className="dashboard-container">
+      <Navbar />
       <div className="container-fluid">
-        <div className="row">
-          <div className="col-12">
-            <nav className="navbar navbar-expand-lg navbar-dark bg-dark">
-              <div className="container-fluid">
-                <span className="navbar-brand">Rodela - Admin Panel</span>
-                <div className="navbar-nav ms-auto">
-                  <MessageNotification userType={user?.userType} />
-                  <button 
-                    className="btn btn-outline-light"
-                    onClick={handleLogout}
-                  >
-                    Logout
-                  </button>
-                </div>
-              </div>
-            </nav>
-          </div>
-        </div>
+
 
         <div className="row mt-5">
           <div className="col-lg-10 col-xl-8 mx-auto">

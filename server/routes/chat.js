@@ -6,6 +6,7 @@ const {
   getConversation,
   getUserConversations,
   markAsRead,
+  getUnreadCount,
   getUnreadMessages
 } = require('../controllers/chatController');
 
@@ -22,7 +23,10 @@ router.get('/conversation/:otherUserId', getConversation);
 router.get('/conversations', getUserConversations);
 
 // Mark messages as read in a conversation
-router.put('/read/:conversationId', markAsRead);
+router.put('/read/:otherUserId', markAsRead);
+
+// Get unread messages count for current user
+router.get('/unread-count', getUnreadCount);
 
 // Get unread messages for current user
 router.get('/unread-messages', getUnreadMessages);

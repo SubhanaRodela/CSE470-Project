@@ -1,95 +1,107 @@
-/* Profile Card Backdrop */
-.profile-card-backdrop {
+/* Profile Modal Styles */
+.profile-modal-backdrop {
   position: fixed;
   top: 0;
   left: 0;
   right: 0;
   bottom: 0;
-  background-color: rgba(0, 0, 0, 0.5);
-  z-index: 1040;
-  animation: fadeIn 0.3s ease-out;
+  background: rgba(0, 0, 0, 0.4);
+  backdrop-filter: blur(2px);
+  z-index: 9998;
+  padding: 20px;
+  box-sizing: border-box;
+  animation: backdropFadeIn 0.3s ease;
 }
 
-/* Profile Card Container */
-.profile-card {
-  position: fixed;
-  top: 0;
-  right: -100%;
-  width: 100%;
-  max-width: 500px;
-  height: 100vh;
+.profile-modal {
   background: white;
-  box-shadow: -5px 0 25px rgba(0, 0, 0, 0.15);
-  z-index: 1050;
-  transition: right 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-  display: flex;
-  flex-direction: column;
+  border-radius: 20px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+  max-width: 500px;
+  width: 100%;
+  max-height: 75vh;
   overflow: hidden;
+  transform: scale(0.9);
+  opacity: 0;
+  transition: all 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+  z-index: 9999;
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%) scale(0.9);
+  margin: 0;
+  /* Add entrance animation */
+  animation: profileCardEntrance 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
 
-.profile-card.slide-in {
-  right: 0;
+.profile-modal.modal-open {
+  transform: translate(-50%, -50%) scale(1);
+  opacity: 1;
 }
 
-/* Profile Card Header */
-.profile-card-header {
-  display: flex;
-  align-items: center;
-  padding: 24px;
+/* Header */
+.profile-modal-header {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
   color: white;
+  padding: 24px;
   position: relative;
+  display: flex;
+  align-items: flex-start;
+  gap: 16px;
+}
+
+.profile-modal-avatar {
+  font-size: 3rem;
+  color: rgba(255, 255, 255, 0.9);
   flex-shrink: 0;
 }
 
-.profile-card-avatar {
-  margin-right: 16px;
-  font-size: 3rem;
-  color: rgba(255, 255, 255, 0.9);
-}
-
-.profile-card-info {
+.profile-modal-info {
   flex: 1;
+  min-width: 0;
 }
 
-.profile-card-name {
-  margin: 0 0 4px 0;
-  font-size: 1.5rem;
-  font-weight: 600;
-  line-height: 1.2;
-}
-
-.profile-card-occupation {
+.profile-modal-name {
   margin: 0 0 8px 0;
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: white;
+}
+
+.profile-modal-occupation {
+  margin: 0 0 12px 0;
   font-size: 1rem;
-  opacity: 0.9;
+  color: rgba(255, 255, 255, 0.9);
   font-weight: 500;
 }
 
-.profile-card-rating {
+.profile-modal-rating {
   display: flex;
   align-items: center;
   gap: 8px;
+  flex-wrap: wrap;
 }
 
-.profile-card-rating i {
-  font-size: 0.9rem;
+.profile-modal-rating .bi {
+  font-size: 1rem;
+  color: #ffd700;
 }
 
 .rating-text {
-  font-size: 0.9rem;
-  opacity: 0.9;
+  font-size: 0.875rem;
+  color: rgba(255, 255, 255, 0.9);
+  font-weight: 500;
 }
 
-.profile-card-close {
+.profile-modal-close {
   position: absolute;
   top: 16px;
   right: 16px;
   background: rgba(255, 255, 255, 0.2);
   border: none;
   color: white;
-  width: 36px;
-  height: 36px;
+  width: 32px;
+  height: 32px;
   border-radius: 50%;
   display: flex;
   align-items: center;
@@ -99,67 +111,69 @@
   backdrop-filter: blur(10px);
 }
 
-.profile-card-close:hover {
+.profile-modal-close:hover {
   background: rgba(255, 255, 255, 0.3);
   transform: scale(1.1);
 }
 
-.profile-card-close i {
-  font-size: 1.1rem;
+.profile-modal-close .bi {
+  font-size: 1.125rem;
 }
 
-/* Profile Card Content */
-.profile-card-content {
-  flex: 1;
+/* Content */
+.profile-modal-content {
   padding: 24px;
+  max-height: 50vh;
   overflow-y: auto;
-  background: #f8fafc;
 }
 
-.profile-card-section {
+.profile-modal-section {
   margin-bottom: 24px;
-  background: white;
-  border-radius: 12px;
-  padding: 20px;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
-.profile-card-section:last-child {
+.profile-modal-section:last-child {
   margin-bottom: 0;
 }
 
-.profile-card-section h4 {
+.profile-modal-section h4 {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin: 0 0 16px 0;
-  font-size: 1.1rem;
-  font-weight: 600;
-  color: #1e293b;
-}
-
-.profile-card-section h4 i {
-  color: #667eea;
+  margin: 0 0 12px 0;
   font-size: 1rem;
+  font-weight: 600;
+  color: #374151;
 }
 
-/* Contact Information */
-.contact-info p {
+.profile-modal-section h4 .bi {
+  color: #667eea;
+  font-size: 1.125rem;
+}
+
+.contact-info p,
+.pricing-info p,
+.about-text {
   margin: 0 0 8px 0;
-  font-size: 0.95rem;
+  color: #6b7280;
   line-height: 1.5;
 }
 
-.contact-info p:last-child {
+.contact-info p:last-child,
+.pricing-info p:last-child {
   margin-bottom: 0;
 }
 
-.contact-info strong {
-  color: #374151;
+.charge-amount {
+  font-size: 1.125rem;
+  color: #059669;
   font-weight: 600;
 }
 
-/* Services List */
+.charge-note {
+  color: #9ca3af;
+  font-size: 0.875rem;
+}
+
 .services-list {
   display: flex;
   flex-wrap: wrap;
@@ -171,218 +185,167 @@
   color: #374151;
   padding: 6px 12px;
   border-radius: 20px;
-  font-size: 0.85rem;
+  font-size: 0.875rem;
   font-weight: 500;
   border: 1px solid #e5e7eb;
 }
 
-/* About Text */
-.about-text {
-  margin: 0;
-  line-height: 1.6;
-  color: #4b5563;
-  font-size: 0.95rem;
-}
 
-/* Reviews Preview */
-.reviews-preview {
-  max-height: 300px;
-  overflow-y: auto;
-}
 
-.review-item {
-  padding: 16px;
-  border: 1px solid #e5e7eb;
-  border-radius: 8px;
-  margin-bottom: 12px;
+/* Action Buttons */
+.profile-modal-actions {
+  padding: 24px;
   background: #f9fafb;
-}
-
-.review-item:last-child {
-  margin-bottom: 0;
-}
-
-.review-header {
+  border-top: 1px solid #f3f4f6;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 8px;
-}
-
-.review-stars {
-  display: flex;
-  gap: 2px;
-}
-
-.review-stars i {
-  font-size: 0.8rem;
-}
-
-.review-date {
-  color: #6b7280;
-  font-size: 0.8rem;
-}
-
-.review-comment {
-  margin: 0;
-  font-size: 0.9rem;
-  line-height: 1.5;
-  color: #374151;
-}
-
-/* Profile Card Actions */
-.profile-card-actions {
-  display: flex;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid #e5e7eb;
-  background: white;
-  flex-shrink: 0;
   flex-wrap: wrap;
-}
-
-.profile-card-actions .btn {
-  flex: 1;
-  min-width: 120px;
-  padding: 10px 16px;
-  font-size: 0.9rem;
-  font-weight: 500;
-  border-radius: 8px;
-  transition: all 0.2s ease;
-  display: flex;
-  align-items: center;
+  gap: 12px;
   justify-content: center;
-  gap: 6px;
 }
 
-.profile-card-actions .btn:hover {
-  transform: translateY(-1px);
+.profile-modal-actions .btn {
+  padding: 10px 20px;
+  border-radius: 12px;
+  font-weight: 500;
+  font-size: 0.875rem;
+  transition: all 0.2s ease;
+  border: 2px solid transparent;
+}
+
+.profile-modal-actions .btn:hover {
+  transform: translateY(-2px);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
-.profile-card-actions .btn-primary {
+.profile-modal-actions .btn-primary {
   background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-  border: none;
+  border-color: transparent;
   color: white;
 }
 
-.profile-card-actions .btn-primary:hover {
-  background: linear-gradient(135deg, #5a67d8 0%, #6b46c1 100%);
+.profile-modal-actions .btn-primary:hover {
+  background: linear-gradient(135deg, #5a6fd8 0%, #6a4190 100%);
 }
 
-.profile-card-actions .btn-outline-primary {
+.profile-modal-actions .btn-outline-primary {
   border-color: #667eea;
   color: #667eea;
 }
 
-.profile-card-actions .btn-outline-primary:hover {
+.profile-modal-actions .btn-outline-primary:hover {
   background: #667eea;
-  border-color: #667eea;
   color: white;
 }
 
-.profile-card-actions .btn-outline-info {
+.profile-modal-actions .btn-outline-info {
   border-color: #06b6d4;
   color: #06b6d4;
 }
 
-.profile-card-actions .btn-outline-info:hover {
+.profile-modal-actions .btn-outline-info:hover {
   background: #06b6d4;
-  border-color: #06b6d4;
   color: white;
 }
 
-.profile-card-actions .btn-warning {
-  background: linear-gradient(135deg, #f59e0b 0%, #d97706 100%);
-  border: none;
+.profile-modal-actions .btn-outline-success {
+  border-color: #059669;
+  color: #059669;
+}
+
+.profile-modal-actions .btn-outline-success:hover {
+  background: #059669;
   color: white;
-}
-
-.profile-card-actions .btn-warning:hover {
-  background: linear-gradient(135deg, #d97706 0%, #b45309 100%);
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-/* Animations */
-@keyframes fadeIn {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
 }
 
 /* Responsive Design */
-@media (max-width: 768px) {
-  .profile-card {
+@media (max-width: 640px) {
+  .profile-modal-backdrop {
+    padding: 16px;
+  }
+  
+  .profile-modal {
     max-width: 100%;
+    border-radius: 16px;
   }
   
-  .profile-card-header {
+  .profile-modal-header {
     padding: 20px;
   }
   
-  .profile-card-avatar {
-    font-size: 2.5rem;
-  }
-  
-  .profile-card-name {
-    font-size: 1.3rem;
-  }
-  
-  .profile-card-content {
+  .profile-modal-content {
     padding: 20px;
   }
   
-  .profile-card-actions {
-    padding: 16px 20px;
+  .profile-modal-actions {
+    padding: 20px;
     flex-direction: column;
   }
   
-  .profile-card-actions .btn {
+  .profile-modal-actions .btn {
     width: 100%;
   }
 }
 
-@media (max-width: 480px) {
-  .profile-card-header {
-    flex-direction: column;
-    text-align: center;
-    padding: 16px;
-  }
-  
-  .profile-card-avatar {
-    margin-right: 0;
-    margin-bottom: 12px;
-  }
-  
-  .profile-card-close {
-    top: 12px;
-    right: 12px;
-  }
-}
-
 /* Scrollbar Styling */
-.profile-card-content::-webkit-scrollbar,
-.reviews-preview::-webkit-scrollbar {
+.profile-modal-content::-webkit-scrollbar {
   width: 6px;
 }
 
-.profile-card-content::-webkit-scrollbar-track,
-.reviews-preview::-webkit-scrollbar-track {
-  background: #f1f1f1;
+.profile-modal-content::-webkit-scrollbar-track {
+  background: #f1f5f9;
   border-radius: 3px;
 }
 
-.profile-card-content::-webkit-scrollbar-thumb,
-.reviews-preview::-webkit-scrollbar-thumb {
-  background: #c1c1c1;
+.profile-modal-content::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
   border-radius: 3px;
 }
 
-.profile-card-content::-webkit-scrollbar-thumb:hover,
-.reviews-preview::-webkit-scrollbar-thumb:hover {
-  background: #a8a8a8;
+.profile-modal-content::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+/* Profile Card Entrance Animation */
+@keyframes profileCardEntrance {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.8) rotateY(-10deg);
+    filter: blur(4px);
+  }
+  50% {
+    opacity: 0.8;
+    transform: translate(-50%, -50%) scale(1.05) rotateY(-2deg);
+    filter: blur(1px);
+  }
+  100% {
+    opacity: 1;
+    transform: translate(-50%, -50%) scale(1) rotateY(0deg);
+    filter: blur(0px);
+  }
+}
+
+/* Backdrop Fade In Animation */
+@keyframes backdropFadeIn {
+  0% {
+    opacity: 0;
+    backdrop-filter: blur(0px);
+  }
+  100% {
+    opacity: 1;
+    backdrop-filter: blur(2px);
+  }
+}
+
+/* Enhanced hover effects for action buttons */
+.profile-modal-actions .btn-outline-warning {
+  border-color: #f59e0b;
+  color: #f59e0b;
+  transition: all 0.15s ease; /* Faster transition */
+}
+
+.profile-modal-actions .btn-outline-warning:hover {
+  background: #f59e0b;
+  color: white;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
 }
