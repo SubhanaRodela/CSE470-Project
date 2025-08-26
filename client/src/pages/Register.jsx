@@ -16,7 +16,8 @@ const Register = () => {
     latitude: '',
     charge: '',
     password: '',
-    confirmPassword: ''
+    confirmPassword: '',
+    address: '' // Added address field
   });
   const [loading, setLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
@@ -82,13 +83,6 @@ const Register = () => {
       return;
     }
 
-    // Validate location coordinates for all users
-    if (!formData.longitude || !formData.latitude) {
-      toast.error('Please enter your location coordinates');
-      setLoading(false);
-      return;
-    }
-
     if (formData.userType === 'service provider') {
       if (!formData.occupation) {
         toast.error('Please select an occupation for service provider');
@@ -120,10 +114,16 @@ const Register = () => {
         email: formData.email,
         phone: formData.phone,
         userType: formData.userType,
-        password: formData.password,
-        longitude: parseFloat(formData.longitude),
-        latitude: parseFloat(formData.latitude)
+        password: formData.password
       };
+
+      // Only include location data if provided and valid
+      if (formData.longitude && formData.latitude && 
+          formData.longitude.trim() !== '' && formData.latitude.trim() !== '' &&
+          !isNaN(parseFloat(formData.longitude)) && !isNaN(parseFloat(formData.latitude))) {
+        requestData.longitude = parseFloat(formData.longitude);
+        requestData.latitude = parseFloat(formData.latitude);
+      }
 
       // Only include service provider specific fields if user type is service provider
       if (formData.userType === 'service provider') {
@@ -131,6 +131,10 @@ const Register = () => {
         requestData.charge = parseFloat(formData.charge);
       }
 
+      // Include address if provided
+      if (formData.address && formData.address.trim() !== '') {
+        requestData.address = formData.address;
+      }
 
 
       const response = await axios.post('http://localhost:5000/api/auth/register', requestData);
@@ -325,7 +329,7 @@ const Register = () => {
                 fontWeight: '600',
                 color: '#333'
               }}>
-                Location Coordinates *
+                Location Coordinates (Optional)
               </label>
               <div style={{ display: 'flex', gap: '10px' }}>
                 <div style={{ flex: 1 }}>
@@ -335,7 +339,7 @@ const Register = () => {
                     fontSize: '12px',
                     color: '#666'
                   }}>
-                    Longitude
+                    Longitude (Optional)
                   </label>
                   <input
                     type="number"
@@ -345,7 +349,6 @@ const Register = () => {
                     onChange={handleChange}
                     step="0.0001"
                     placeholder="-74.0060"
-                    required
                     style={{
                       width: '100%',
                       height: '45px',
@@ -369,7 +372,7 @@ const Register = () => {
                     fontSize: '12px',
                     color: '#666'
                   }}>
-                    Latitude
+                    Latitude (Optional)
                   </label>
                   <input
                     type="number"
@@ -379,7 +382,6 @@ const Register = () => {
                     onChange={handleChange}
                     step="0.0001"
                     placeholder="40.7128"
-                    required
                     style={{
                       width: '100%',
                       height: '45px',
@@ -398,8 +400,42 @@ const Register = () => {
                 </div>
               </div>
               <small style={{ color: '#666', fontSize: '12px' }}>
-                Enter your location coordinates (e.g., -74.0060, 40.7128 for New York)
+                Location coordinates are optional during registration. You can add them later in your profile settings for location-based services.
               </small>
+            </div>
+
+            {/* Address field for all users */}
+            <div style={{ marginBottom: '20px' }}>
+              <label htmlFor="address" style={{ 
+                display: 'block', 
+                marginBottom: '8px', 
+                fontWeight: '600',
+                color: '#333'
+              }}>
+                Address (Optional)
+              </label>
+              <input
+                type="text"
+                id="address"
+                name="address"
+                value={formData.address}
+                onChange={handleChange}
+                placeholder="Enter your address (optional)"
+                style={{
+                  width: '100%',
+                  height: '45px',
+                  padding: '10px 15px',
+                  border: '1px solid #ddd',
+                  borderRadius: '6px',
+                  fontSize: '16px',
+                  outline: 'none',
+                  transition: 'border-color 0.3s',
+                  backgroundColor: 'white',
+                  color: '#333'
+                }}
+                onFocus={(e) => e.target.style.borderColor = '#007bff'}
+                onBlur={(e) => e.target.style.borderColor = '#ddd'}
+              />
             </div>
 
             {formData.userType === 'service provider' && (

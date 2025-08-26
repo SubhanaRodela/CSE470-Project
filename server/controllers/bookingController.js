@@ -59,13 +59,14 @@ const createBooking = async (req, res) => {
       title,
       description,
       bookingDate: parsedDate,
-      charge: serviceProvider.charge || 0
+      charge: serviceProvider.charge || 0,
+      userAddress: user.address || ''
     });
 
     await booking.save();
 
     const populatedBooking = await Booking.findById(booking._id)
-      .populate('user', 'name email phone')
+      .populate('user', 'name email phone address')
       .populate('serviceProvider', 'name email phone occupation');
 
     res.status(201).json({
@@ -120,7 +121,7 @@ const getServiceProviderBookings = async (req, res) => {
     }
 
     const bookings = await Booking.find({ serviceProvider: serviceProviderId })
-      .populate('user', 'name email phone')
+      .populate('user', 'name email phone address')
       .sort({ createdAt: -1 });
 
     res.json({

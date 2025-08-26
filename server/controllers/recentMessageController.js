@@ -5,13 +5,25 @@ const User = require('../models/User');
 const getUserRecentMessages = async (req, res) => {
   try {
     const userId = req.user.userId;
+    console.log('Getting recent messages for user:', userId);
     
     // Get all recent messages where this user is the sender
     const recentMessages = await RecentMessage.find({ userId })
       .populate('providerId', '_id name occupation userType')
       .sort({ 'lastMessage.timestamp': -1 });
 
-    const formattedMessages = recentMessages.map(msg => ({
+    console.log('Found recent messages:', recentMessages.length);
+    
+    // Filter out messages with null providerId and log any issues
+    const validMessages = recentMessages.filter(msg => {
+      if (!msg.providerId) {
+        console.log('Found message with null providerId:', msg._id);
+        return false;
+      }
+      return true;
+    });
+
+    const formattedMessages = validMessages.map(msg => ({
       id: msg._id,
       provider: {
         id: msg.providerId._id,
@@ -27,6 +39,8 @@ const getUserRecentMessages = async (req, res) => {
       unreadCount: msg.unreadCount,
       conversationId: msg.conversationId
     }));
+
+    console.log('Returning formatted messages:', formattedMessages.length);
 
     res.json({
       success: true,
@@ -47,13 +61,25 @@ const getUserRecentMessages = async (req, res) => {
 const getProviderRecentMessages = async (req, res) => {
   try {
     const providerId = req.user.userId;
+    console.log('Getting recent messages for provider:', providerId);
     
     // Get all recent messages where this provider is the receiver
     const recentMessages = await RecentMessage.find({ providerId })
       .populate('userId', '_id name userType')
       .sort({ 'lastMessage.timestamp': -1 });
 
-    const formattedMessages = recentMessages.map(msg => ({
+    console.log('Found recent messages:', recentMessages.length);
+    
+    // Filter out messages with null userId and log any issues
+    const validMessages = recentMessages.filter(msg => {
+      if (!msg.userId) {
+        console.log('Found message with null userId:', msg._id);
+        return false;
+      }
+      return true;
+    });
+
+    const formattedMessages = validMessages.map(msg => ({
       id: msg._id,
       user: {
         id: msg.userId._id,
@@ -68,6 +94,8 @@ const getProviderRecentMessages = async (req, res) => {
       unreadCount: msg.unreadCount,
       conversationId: msg.conversationId
     }));
+
+    console.log('Returning formatted messages:', formattedMessages.length);
 
     res.json({
       success: true,

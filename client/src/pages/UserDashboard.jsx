@@ -72,8 +72,14 @@ const MapControls = ({ mapRef, userLocation, onGoHome }) => {
       map.setView([userLocation.latitude, userLocation.longitude], 15);
       onGoHome(); // Trigger the callback to show user marker
     } else {
-      // Fallback to default location if user location not available
-      map.setView([51.505, -0.09], 13);
+      // Fallback to user's home location if available, otherwise default
+      const user = JSON.parse(localStorage.getItem('user') || '{}');
+      if (user.latitude && user.longitude) {
+        map.setView([user.latitude, user.longitude], 15);
+      } else {
+        // Final fallback to default location
+        map.setView([51.505, -0.09], 13);
+      }
     }
   };
 
@@ -150,6 +156,25 @@ const UserDashboard = () => {
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [routeError, setRouteError] = useState(null);
   
+  // Floating search UI state
+  const [isSearchExpanded, setIsSearchExpanded] = useState(() => {
+    const saved = localStorage.getItem('floatingSearchExpanded');
+    return saved ? JSON.parse(saved) : false;
+  });
+  const [floatingSearchPos, setFloatingSearchPos] = useState(() => {
+    const saved = localStorage.getItem('floatingSearchPos');
+    if (saved) {
+      try { return JSON.parse(saved); } catch { /* noop */ }
+    }
+    return { x: 24, y: 24 };
+  });
+  const [floatingSearchQuery, setFloatingSearchQuery] = useState('');
+  const [floatingSuggestions, setFloatingSuggestions] = useState([]);
+  const [showFloatingSuggestions, setShowFloatingSuggestions] = useState(false);
+  const floatingSearchRef = useRef(null);
+  const mapAreaRef = useRef(null);
+  const draggingRef = useRef({ active: false, offsetX: 0, offsetY: 0 });
+
   const mapRef = useRef(null);
   const sidebarRef = useRef(null);
   const resizeHandleRef = useRef(null);
@@ -953,24 +978,95 @@ const UserDashboard = () => {
     document.body.style.userSelect = '';
   };
 
+  // Persist floating search UI state
+  useEffect(() => {
+    localStorage.setItem('floatingSearchExpanded', JSON.stringify(isSearchExpanded));
+  }, [isSearchExpanded]);
+  useEffect(() => {
+    localStorage.setItem('floatingSearchPos', JSON.stringify(floatingSearchPos));
+  }, [floatingSearchPos]);
+
+  // Close floating suggestions when clicking outside
+  useEffect(() => {
+    const onDocMouseDown = (e) => {
+      const node = floatingSearchRef.current;
+      if (!node) return;
+      if (!node.contains(e.target)) {
+        setShowFloatingSuggestions(false);
+      }
+    };
+    document.addEventListener('mousedown', onDocMouseDown);
+    return () => document.removeEventListener('mousedown', onDocMouseDown);
+  }, []);
+
+  // Floating search helpers
+  const updateFloatingSuggestions = (query) => {
+    if (!query || query.trim().length < 1) {
+      setFloatingSuggestions([]);
+      setShowFloatingSuggestions(false);
+      return;
+    }
+    const uniques = getUniqueOccupations();
+    const filtered = uniques
+      .filter(o => o && o.toLowerCase().includes(query.toLowerCase()))
+      .slice(0, 8);
+    setFloatingSuggestions(filtered);
+    setShowFloatingSuggestions(filtered.length > 0);
+  };
+
+  const executeFloatingSearch = (term) => {
+    const q = (term ?? floatingSearchQuery).trim();
+    if (q.length >= 2) {
+      searchByOccupation(q);
+      setShowFloatingSuggestions(false);
+    }
+  };
+
+  // Drag handlers for floating search
+  const handleFloatingSearchMouseDown = (e) => {
+    const node = floatingSearchRef.current;
+    if (!node) return;
+    draggingRef.current.active = true;
+    const rect = node.getBoundingClientRect();
+    draggingRef.current.offsetX = e.clientX - rect.left;
+    draggingRef.current.offsetY = e.clientY - rect.top;
+    document.body.style.userSelect = 'none';
+  };
+  const handleFloatingSearchMouseMove = (e) => {
+    if (!draggingRef.current.active) return;
+    const container = mapAreaRef.current;
+    const node = floatingSearchRef.current;
+    if (!container || !node) return;
+    const bounds = container.getBoundingClientRect();
+    let newX = e.clientX - bounds.left - draggingRef.current.offsetX;
+    let newY = e.clientY - bounds.top - draggingRef.current.offsetY;
+    // Constrain within map area
+    newX = Math.max(0, Math.min(newX, bounds.width - node.offsetWidth));
+    newY = Math.max(0, Math.min(newY, bounds.height - node.offsetHeight));
+    setFloatingSearchPos({ x: newX, y: newY });
+  };
+  const handleFloatingSearchMouseUp = () => {
+    if (draggingRef.current.active) {
+      draggingRef.current.active = false;
+      document.body.style.userSelect = '';
+    }
+  };
+  useEffect(() => {
+    const move = (e) => handleFloatingSearchMouseMove(e);
+    const up = () => handleFloatingSearchMouseUp();
+    document.addEventListener('mousemove', move);
+    document.addEventListener('mouseup', up);
+    return () => {
+      document.removeEventListener('mousemove', move);
+      document.removeEventListener('mouseup', up);
+    };
+  }, []);
+
   const toggleSidebar = () => {
     const newCollapsedState = !isSidebarCollapsed;
     setIsSidebarCollapsed(newCollapsedState);
     localStorage.setItem('sidebarCollapsed', JSON.stringify(newCollapsedState));
   };
-
-  // Add resize event listeners
-  useEffect(() => {
-    if (isResizing) {
-      document.addEventListener('mousemove', handleResizeMove);
-      document.addEventListener('mouseup', handleResizeEnd);
-      
-      return () => {
-        document.removeEventListener('mousemove', handleResizeMove);
-        document.removeEventListener('mouseup', handleResizeEnd);
-      };
-    }
-  }, [isResizing]);
 
   // Add keyboard shortcuts
   useEffect(() => {
@@ -1581,7 +1677,61 @@ const UserDashboard = () => {
           <div 
             className="map-area"
             style={{ width: isSidebarCollapsed ? 'calc(100% - 50px)' : `calc(100% - ${sidebarWidth}%)` }}
+            ref={mapAreaRef}
           >
+            {/* Floating draggable/collapsible search */}
+            <div
+              ref={floatingSearchRef}
+              className={`floating-search ${isSearchExpanded ? 'expanded' : ''}`}
+              style={{ left: floatingSearchPos.x, top: floatingSearchPos.y }}
+            >
+              <div
+                className="search-drag-handle"
+                title="Drag"
+                onMouseDown={handleFloatingSearchMouseDown}
+              />
+              <button
+                className="search-toggle"
+                type="button"
+                title={isSearchExpanded ? 'Close search' : 'Open search'}
+                onClick={() => setIsSearchExpanded((v) => !v)}
+              >
+                <i className="bi bi-search"></i>
+              </button>
+              <input
+                className="search-input"
+                type="text"
+                placeholder="Search occupation..."
+                value={floatingSearchQuery}
+                onChange={(e) => { setFloatingSearchQuery(e.target.value); updateFloatingSuggestions(e.target.value); }}
+                onFocus={() => { if (floatingSuggestions.length > 0) setShowFloatingSuggestions(true); }}
+                onKeyDown={(e) => { if (e.key === 'Enter') executeFloatingSearch(); }}
+              />
+              <button
+                className="search-send"
+                type="button"
+                title="Search"
+                onClick={() => executeFloatingSearch()}
+              >
+                <i className="bi bi-send"></i>
+              </button>
+
+              {/* Suggestions dropdown */}
+              {isSearchExpanded && showFloatingSuggestions && floatingSuggestions.length > 0 && (
+                <div className="floating-search-suggestions">
+                  {floatingSuggestions.map((s, idx) => (
+                    <div
+                      key={`${s}-${idx}`}
+                      className="floating-suggestion-item"
+                      onClick={() => { setFloatingSearchQuery(s); executeFloatingSearch(s); }}
+                    >
+                      <i className="bi bi-briefcase me-2"></i>{s}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+
             <MapContainer
               center={[51.505, -0.09]}
               zoom={13}

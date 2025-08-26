@@ -47,6 +47,7 @@ const TransactionHistory = () => {
       const data = await response.json();
       
       if (data.success) {
+        console.log('Transaction data received:', data.data.transactions);
         setTransactions(data.data.transactions);
         setTotalPages(data.data.pagination.totalPages);
         setTotalTransactions(data.data.pagination.totalTransactions);
@@ -112,6 +113,7 @@ const TransactionHistory = () => {
 
   const downloadReceipt = async (transactionId) => {
     try {
+      console.log('Downloading receipt for transactionId:', transactionId);
       const token = localStorage.getItem('token');
       const response = await fetch(`http://localhost:5000/api/transactions/${transactionId}/receipt`, {
         headers: {
@@ -139,6 +141,7 @@ const TransactionHistory = () => {
         document.body.removeChild(a);
       } else {
         const errorData = await response.json();
+        console.error('Receipt download failed:', errorData);
         alert(errorData.message || 'Failed to download receipt');
       }
     } catch (error) {
@@ -300,7 +303,16 @@ const TransactionHistory = () => {
                                <div className="transaction-actions mt-2">
                                  <button
                                    className="btn btn-outline-primary btn-sm"
-                                   onClick={() => downloadReceipt(transaction.id)}
+                                   onClick={() => {
+                                     console.log('Transaction data for receipt:', {
+                                       id: transaction.id,
+                                       transactionId: transaction.transactionId,
+                                       amount: transaction.amount,
+                                       type: transaction.type,
+                                       status: transaction.status
+                                     });
+                                     downloadReceipt(transaction.transactionId);
+                                   }}
                                    title="Download Receipt"
                                  >
                                    <i className="bi bi-download me-1"></i>

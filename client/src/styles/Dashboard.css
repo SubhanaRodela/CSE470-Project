@@ -449,3 +449,27 @@
     padding: 2px 6px;
   }
 } 
+
+.booking-item .user-address,
+.booking-item .client-address {
+  background: #f8f9fa;
+  padding: 12px;
+  border-radius: 8px;
+  border-left: 4px solid #17a2b8;
+}
+
+.booking-item .user-address h6,
+.booking-item .client-address h6 {
+  color: #495057;
+  margin-bottom: 8px;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.booking-item .user-address p,
+.booking-item .client-address p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.85rem;
+  line-height: 1.4;
+} 

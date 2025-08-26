@@ -219,6 +219,11 @@ const Orders = () => {
                           <p className="mb-1 text-muted">
                             <strong>Date:</strong> {new Date(booking.bookingDate).toLocaleDateString()}
                           </p>
+                          {booking.userAddress && (
+                            <p className="mb-1 text-muted">
+                              <strong>Address:</strong> {booking.userAddress}
+                            </p>
+                          )}
                           {booking.charge && (
                             <p className="mb-0 text-success">
                               <strong>Charge:</strong> ৳{booking.charge}
@@ -245,6 +250,16 @@ const Orders = () => {
                                 <p className="mb-1"><strong>Email:</strong> {booking.user.email}</p>
                                 <p className="mb-0"><strong>Phone:</strong> {booking.user.phone}</p>
                               </div>
+                              
+                              {booking.userAddress && (
+                                <div className="client-address mt-3">
+                                  <h6>Service Address:</h6>
+                                  <p className="mb-0 text-muted">
+                                    <i className="bi bi-geo-alt me-2"></i>
+                                    {booking.userAddress}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                             <div className="col-md-4">
                               <h6>Actions:</h6>

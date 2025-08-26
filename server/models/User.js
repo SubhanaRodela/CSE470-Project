@@ -49,11 +49,16 @@ const userSchema = new mongoose.Schema({
   },
   longitude: {
     type: Number,
-    required: true
+    required: false
   },
   latitude: {
     type: Number,
-    required: true
+    required: false
+  },
+  address: {
+    type: String,
+    required: false,
+    trim: true
   },
   charge: {
     type: Number,

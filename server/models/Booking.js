@@ -36,6 +36,11 @@ const bookingSchema = new mongoose.Schema({
     type: Number,
     required: true,
     min: 0
+  },
+  userAddress: {
+    type: String,
+    required: false,
+    trim: true
   }
 }, {
   timestamps: true

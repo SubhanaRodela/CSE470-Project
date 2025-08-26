@@ -60,3 +60,164 @@
 .auth-container a:hover {
   color: #5a6fd8;
 } 
+
+/* Map Modal Styles */
+.map-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1050;
+  padding: 20px;
+}
+
+.map-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.3);
+  width: 100%;
+  max-width: 600px;
+  max-height: 90vh;
+  overflow: hidden;
+  animation: modalSlideIn 0.3s ease-out;
+}
+
+@keyframes modalSlideIn {
+  from {
+    transform: translateY(-50px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.map-modal-header {
+  padding: 20px 24px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  background: #f8f9fa;
+}
+
+.map-modal-header h5 {
+  margin: 0;
+  color: #2d3748;
+  font-weight: 600;
+}
+
+.map-modal-header .btn-close {
+  background: none;
+  border: none;
+  font-size: 1.2rem;
+  color: #6c757d;
+  cursor: pointer;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s ease;
+}
+
+.map-modal-header .btn-close:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.map-modal-body {
+  padding: 24px;
+}
+
+.map-instructions {
+  background: #f8f9fa;
+  padding: 16px;
+  border-radius: 8px;
+  border: 1px solid #e9ecef;
+}
+
+.map-instructions p {
+  margin: 0;
+  color: #6c757d;
+  font-size: 0.9rem;
+}
+
+.coordinates-display {
+  background: #f8f9fa;
+  padding: 10px;
+  border-radius: 8px;
+  font-family: monospace;
+  font-size: 0.9rem;
+  margin-top: 10px;
+}
+
+.address-display {
+  background: #e3f2fd;
+  padding: 10px;
+  border-radius: 8px;
+  border-left: 4px solid #2196f3;
+  margin-top: 10px;
+  word-wrap: break-word;
+}
+
+.map-modal-footer {
+  padding: 20px 24px;
+  border-top: 1px solid #e9ecef;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+/* Location Picker Marker */
+.location-picker-marker {
+  background: none !important;
+  border: none !important;
+}
+
+.location-picker-marker .marker-content {
+  width: 40px;
+  height: 40px;
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: white;
+  font-size: 20px;
+  box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+  border: 3px solid white;
+  cursor: grab;
+  transition: all 0.2s ease;
+}
+
+.location-picker-marker .marker-content:hover {
+  transform: scale(1.1);
+  box-shadow: 0 6px 16px rgba(102, 126, 234, 0.6);
+}
+
+.location-picker-marker .marker-content:active {
+  cursor: grabbing;
+  transform: scale(0.95);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .map-modal {
+    max-width: 95vw;
+    max-height: 95vh;
+  }
+  
+  .map-modal-body {
+    padding: 16px;
+  }
+  
+  .map-modal-header,
+  .map-modal-footer {
+    padding: 16px 20px;
+  }
+} 

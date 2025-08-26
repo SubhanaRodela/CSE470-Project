@@ -232,6 +232,11 @@ const UserService = () => {
                           <p className="mb-1 text-muted">
                             <strong>Date:</strong> {new Date(booking.bookingDate).toLocaleDateString()}
                           </p>
+                          {booking.userAddress && (
+                            <p className="mb-1 text-muted">
+                              <strong>Address:</strong> {booking.userAddress}
+                            </p>
+                          )}
                           {booking.charge && (
                             <p className="mb-0 text-success">
                               <strong>Charge:</strong> ৳{booking.charge}
@@ -258,6 +263,16 @@ const UserService = () => {
                                 <p className="mb-1"><strong>Occupation:</strong> {booking.serviceProvider?.occupation || 'N/A'}</p>
                                 <p className="mb-0"><strong>Services:</strong> {booking.serviceProvider?.services?.join(', ') || 'N/A'}</p>
                               </div>
+                              
+                              {booking.userAddress && (
+                                <div className="user-address mt-3">
+                                  <h6>Your Service Address:</h6>
+                                  <p className="mb-0 text-muted">
+                                    <i className="bi bi-geo-alt me-2"></i>
+                                    {booking.userAddress}
+                                  </p>
+                                </div>
+                              )}
                             </div>
                             <div className="col-md-4">
                               <h6>Actions:</h6>

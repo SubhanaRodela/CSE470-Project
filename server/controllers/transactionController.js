@@ -339,7 +339,7 @@ const downloadReceipt = async (req, res) => {
     console.log('Download receipt request:', { transactionId, userId });
 
     // Find the transaction
-    const transaction = await TransactionHistory.findById(transactionId)
+    const transaction = await TransactionHistory.findOne({ transactionId: transactionId })
       .populate('senderId', 'name email phone')
       .populate('receiverId', 'name email phone')
       .populate('bookingId', 'title description bookingDate');
@@ -352,12 +352,14 @@ const downloadReceipt = async (req, res) => {
     }
 
     console.log('Transaction data for receipt:', {
-      transactionId: transaction._id,
+      transactionId: transaction.transactionId,
+      _id: transaction._id,
       amount: transaction.amount,
       amountType: typeof transaction.amount,
       senderId: transaction.senderId,
       receiverId: transaction.receiverId,
-      serviceDetails: transaction.serviceDetails
+      serviceDetails: transaction.serviceDetails,
+      currency: transaction.currency
     });
 
     // Check if user is involved in this transaction
@@ -447,18 +449,29 @@ const downloadReceipt = async (req, res) => {
         .font('Helvetica-Bold')
         .text('Payment Information', 320, 180);
      
+     // Ensure amount is properly formatted
+     const formattedAmount = typeof transaction.amount === 'number' ? 
+       transaction.amount.toFixed(2) : 
+       parseFloat(transaction.amount || 0).toFixed(2);
+     
+     console.log('Amount formatting debug:', {
+       originalAmount: transaction.amount,
+       originalType: typeof transaction.amount,
+       formattedAmount: formattedAmount,
+       parsedAmount: parseFloat(transaction.amount || 0)
+     });
+     
      doc.fillColor('black')
         .fontSize(10)
         .font('Helvetica')
-        .text(`Amount: ৳${transaction.amount.toFixed(2)}`, 320, 200)
         .text(`Currency: ${transaction.currency || 'BDT'}`, 320, 215)
         .text(`Description: ${transaction.description}`, 320, 230);
      
-     // Highlight the amount
+     // Highlight the amount prominently
      doc.fillColor('#4caf50')
         .fontSize(16)
         .font('Helvetica-Bold')
-        .text(`৳${transaction.amount.toFixed(2)}`, 320, 200);
+        .text(`Amount: ৳${formattedAmount}`, 320, 200);
 
          // Add sender and receiver information with modern styling
      const isSender = transaction.senderId._id.toString() === userId;

@@ -34,6 +34,7 @@ const Navbar = () => {
   useEffect(() => {
     if (user) {
       console.log('Navbar - Loading data for user:', user);
+      // Load data only once when component mounts
       loadUnreadCount();
       loadConversations();
     }
@@ -153,6 +154,11 @@ const Navbar = () => {
   };
 
   const handleMessages = () => {
+    if (!showMessageList) {
+      // Only load data when opening the dropdown for the first time
+      loadUnreadCount();
+      loadConversations();
+    }
     setShowMessageList(!showMessageList);
   };
 
@@ -199,8 +205,8 @@ const Navbar = () => {
     <nav className="navbar">
       <div className="navbar-container">
         {/* Left side - QuicFix branding */}
-        <div className="navbar-brand" onClick={() => navigate('/')}>
-          QuicFix
+        <div className="navbar-brand" onClick={() => navigate('/user-dashboard')}>
+          QuickFix
         </div>
 
         {/* Right side - Navigation links, Profile picture and message icon */}
