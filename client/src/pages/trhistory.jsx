@@ -9,7 +9,6 @@ const TransactionHistory = () => {
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activeFilter, setActiveFilter] = useState('all');
   const [currentPage, setCurrentPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [totalTransactions, setTotalTransactions] = useState(0);
@@ -26,7 +25,7 @@ const TransactionHistory = () => {
     const userInfo = JSON.parse(userData);
     setUser(userInfo);
     loadTransactions();
-  }, [navigate, currentPage, activeFilter]);
+  }, [navigate, currentPage]);
 
   const loadTransactions = async () => {
     try {
@@ -34,9 +33,6 @@ const TransactionHistory = () => {
       const token = localStorage.getItem('token');
       
       let url = `http://localhost:5000/api/transactions/history?page=${currentPage}&limit=10`;
-      if (activeFilter !== 'all') {
-        url += `&type=${activeFilter}`;
-      }
 
       const response = await fetch(url, {
         headers: {
@@ -61,12 +57,7 @@ const TransactionHistory = () => {
     }
   };
 
-  const getFilteredTransactions = () => {
-    if (activeFilter === 'all') {
-      return transactions;
-    }
-    return transactions.filter(transaction => transaction.type === activeFilter);
-  };
+
 
   const getStatusBadge = (status) => {
     const statusConfig = {
@@ -101,10 +92,7 @@ const TransactionHistory = () => {
     });
   };
 
-  const handleFilterChange = (filter) => {
-    setActiveFilter(filter);
-    setCurrentPage(1);
-  };
+
 
   const handlePageChange = (page) => {
     setCurrentPage(page);
@@ -154,7 +142,7 @@ const TransactionHistory = () => {
     return <div className="text-center mt-5">Loading...</div>;
   }
 
-  const filteredTransactions = getFilteredTransactions();
+  const filteredTransactions = transactions;
 
   return (
     <div className="transaction-history-container">
@@ -172,75 +160,9 @@ const TransactionHistory = () => {
               </button>
             </div>
 
-            {/* Filters */}
-            <div className="filters-section mb-4">
-              <div className="btn-group" role="group">
-                <button
-                  type="button"
-                  className={`btn ${activeFilter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => handleFilterChange('all')}
-                >
-                  All Transactions
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${activeFilter === 'sent' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => handleFilterChange('sent')}
-                >
-                  Sent
-                </button>
-                <button
-                  type="button"
-                  className={`btn ${activeFilter === 'received' ? 'btn-primary' : 'btn-outline-primary'}`}
-                  onClick={() => handleFilterChange('received')}
-                >
-                  Received
-                </button>
-              </div>
-            </div>
 
-            {/* Statistics */}
-            <div className="stats-section mb-4">
-              <div className="row">
-                <div className="col-md-4">
-                  <div className="stat-card">
-                    <div className="stat-icon">
-                      <i className="bi bi-arrow-up-circle text-danger"></i>
-                    </div>
-                    <div className="stat-content">
-                      <h3>Total Sent</h3>
-                      <div className="stat-value">
-                        ৳{transactions.filter(t => t.type === 'sent').reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="stat-card">
-                    <div className="stat-icon">
-                      <i className="bi bi-arrow-down-circle text-success"></i>
-                    </div>
-                    <div className="stat-content">
-                      <h3>Total Received</h3>
-                      <div className="stat-value">
-                        ৳{transactions.filter(t => t.type === 'received').reduce((sum, t) => sum + t.amount, 0).toFixed(2)}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-                <div className="col-md-4">
-                  <div className="stat-card">
-                    <div className="stat-icon">
-                      <i className="bi bi-list-ul text-info"></i>
-                    </div>
-                    <div className="stat-content">
-                      <h3>Total Transactions</h3>
-                      <div className="stat-value">{totalTransactions}</div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
+
+
 
             {/* Transactions List */}
             <div className="transactions-section">
@@ -266,11 +188,6 @@ const TransactionHistory = () => {
                             <i className={`bi ${getTypeIcon(transaction.type)} fs-4`}></i>
                             <span className="ms-2 fw-bold">
                               {transaction.type === 'sent' ? 'Sent' : 'Received'}
-                            </span>
-                          </div>
-                          <div className="transaction-amount">
-                            <span className={`amount ${transaction.type === 'sent' ? 'text-danger' : 'text-success'}`}>
-                              {transaction.type === 'sent' ? '-' : '+'}৳{transaction.amount}
                             </span>
                           </div>
                         </div>
@@ -308,6 +225,10 @@ const TransactionHistory = () => {
                                        id: transaction.id,
                                        transactionId: transaction.transactionId,
                                        amount: transaction.amount,
+                                       amountType: typeof transaction.amount,
+                                       baseAmount: transaction.baseAmount,
+                                       discountApplied: transaction.discountApplied,
+                                       notes: transaction.notes,
                                        type: transaction.type,
                                        status: transaction.status
                                      });
@@ -371,10 +292,7 @@ const TransactionHistory = () => {
                   <i className="bi bi-receipt display-4 text-muted"></i>
                   <h5 className="mt-3 text-muted">No Transactions Found</h5>
                   <p className="text-muted">
-                    {activeFilter === 'all' 
-                      ? "You haven't made any transactions yet."
-                      : `No ${activeFilter} transactions to display.`
-                    }
+                    You haven't made any transactions yet.
                   </p>
                 </div>
               )}

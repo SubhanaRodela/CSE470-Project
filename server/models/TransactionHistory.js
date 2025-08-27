@@ -22,6 +22,16 @@ const transactionHistorySchema = new mongoose.Schema({
     required: true,
     min: 0
   },
+  baseAmount: {
+    type: Number,
+    min: 0
+  },
+  discountApplied: {
+    type: Number,
+    min: 0,
+    max: 100,
+    default: 0
+  },
   currency: {
     type: String,
     default: 'BDT'
@@ -43,6 +53,10 @@ const transactionHistorySchema = new mongoose.Schema({
   bookingId: {
     type: mongoose.Schema.Types.ObjectId,
     ref: 'Booking'
+  },
+  requestId: {
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'MoneyRequest'
   },
   serviceDetails: {
     serviceName: String,
@@ -80,5 +94,6 @@ transactionHistorySchema.pre('save', function(next) {
 transactionHistorySchema.index({ senderId: 1, createdAt: -1 });
 transactionHistorySchema.index({ receiverId: 1, createdAt: -1 });
 transactionHistorySchema.index({ status: 1 });
+transactionHistorySchema.index({ requestId: 1 });
 
 module.exports = mongoose.model('TransactionHistory', transactionHistorySchema);

@@ -204,8 +204,16 @@ const Navbar = () => {
   return (
     <nav className="navbar">
       <div className="navbar-container">
-        {/* Left side - QuicFix branding */}
-        <div className="navbar-brand" onClick={() => navigate('/user-dashboard')}>
+        {/* Left side - QuickFix branding */}
+        <div className="navbar-brand" onClick={() => {
+          if (user.userType === 'user') {
+            navigate('/user-dashboard');
+          } else if (user.userType === 'service provider') {
+            navigate('/service-provider-dashboard');
+          } else if (user.userType === 'admin') {
+            navigate('/admin-dashboard');
+          }
+        }}>
           QuickFix
         </div>
 

@@ -280,12 +280,16 @@ const searchServiceProviders = async (req, res) => {
     let searchQuery = {};
     
     if (query && query.trim().length >= 2) {
-      // If search query provided, filter by name or occupation
+      // If search query provided, filter by name, occupation, or address keywords
+      const words = query.trim().split(/\s+/).filter(Boolean);
+      const addressWordOr = words.map((w) => ({ address: { $regex: w, $options: 'i' } }));
       searchQuery = {
         userType: 'service provider',
         $or: [
           { name: { $regex: query, $options: 'i' } },
-          { occupation: { $regex: query, $options: 'i' } }
+          { occupation: { $regex: query, $options: 'i' } },
+          { address: { $regex: query, $options: 'i' } },
+          ...addressWordOr
         ]
       };
     } else {
@@ -297,7 +301,7 @@ const searchServiceProviders = async (req, res) => {
 
     // Search for service providers
     const serviceProviders = await User.find(searchQuery)
-      .select('_id name occupation longitude latitude phone charge')
+      .select('_id name occupation longitude latitude phone charge address')
       .sort({ name: 1 }); // Sort by name alphabetically
 
     // Transform _id to id for frontend compatibility
@@ -308,7 +312,8 @@ const searchServiceProviders = async (req, res) => {
       longitude: provider.longitude,
       latitude: provider.latitude,
       phone: provider.phone,
-      charge: provider.charge
+      charge: provider.charge,
+      address: provider.address
     }));
 
     console.log('=== Service Provider Search Debug ===');

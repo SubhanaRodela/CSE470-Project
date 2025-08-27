@@ -12,6 +12,7 @@ const walletRoutes = require('./routes/wallets');
 const recentMessageRoutes = require('./routes/recentMessages');
 const qpayRoutes = require('./routes/qpay');
 const transactionRoutes = require('./routes/transactions');
+const moneyRequestRoutes = require('./routes/moneyRequests');
 
 const app = express();
 
@@ -47,6 +48,7 @@ app.use('/api/wallets', walletRoutes);
 app.use('/api/recent-messages', recentMessageRoutes);
 app.use('/api/qpay', qpayRoutes);
 app.use('/api/transactions', transactionRoutes);
+app.use('/api/money-requests', moneyRequestRoutes);
 
 // Basic route
 app.get('/', (req, res) => {

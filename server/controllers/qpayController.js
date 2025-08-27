@@ -204,9 +204,166 @@ const updateBalance = async (req, res) => {
   }
 };
 
+// Update QPay account discount (service providers only)
+const updateDiscount = async (req, res) => {
+  try {
+    const { discount } = req.body;
+    const userId = req.user.userId;
+
+    // Validate discount percentage
+    if (typeof discount !== 'number' || discount < 0 || discount > 100) {
+      return res.status(400).json({
+        success: false,
+        message: 'Discount must be a number between 0 and 100'
+      });
+    }
+
+    // Check if user is a service provider
+    const user = await User.findById(userId);
+    if (!user || user.userType !== 'service provider') {
+      return res.status(403).json({
+        success: false,
+        message: 'Only service providers can update discount'
+      });
+    }
+
+    // Find QPay account
+    const qpayAccount = await QPay.findByUserId(userId);
+    if (!qpayAccount) {
+      return res.status(404).json({
+        success: false,
+        message: 'QPay account not found'
+      });
+    }
+
+    // Update discount
+    await qpayAccount.updateDiscount(discount);
+
+    res.json({
+      success: true,
+      message: 'Discount updated successfully',
+      data: {
+        newDiscount: qpayAccount.discount,
+        previousDiscount: discount
+      }
+    });
+
+  } catch (error) {
+    console.error('Error updating QPay discount:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Reset QPay PIN (requires QuickFix password verification)
+const resetQPayPin = async (req, res) => {
+  try {
+    const { quickfixPassword, newPin } = req.body;
+    const userId = req.user.userId;
+
+    // Validate new PIN
+    if (!newPin || newPin.length !== 4 || !/^\d{4}$/.test(newPin)) {
+      return res.status(400).json({
+        success: false,
+        message: 'New PIN must be exactly 4 digits'
+      });
+    }
+
+    // Find user and verify QuickFix password
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({
+        success: false,
+        message: 'User not found'
+      });
+    }
+
+    // Verify QuickFix password
+    const isPasswordValid = await user.comparePassword(quickfixPassword);
+    if (!isPasswordValid) {
+      return res.status(401).json({
+        success: false,
+        message: 'Invalid QuickFix password'
+      });
+    }
+
+    // Find QPay account
+    const qpayAccount = await QPay.findByUserId(userId);
+    if (!qpayAccount) {
+      return res.status(404).json({
+        success: false,
+        message: 'QPay account not found'
+      });
+    }
+
+    // Update PIN
+    qpayAccount.pin = newPin;
+    qpayAccount.pinString = newPin; // Also update pinString if needed
+    await qpayAccount.save();
+
+    res.json({
+      success: true,
+      message: 'QPay PIN updated successfully'
+    });
+
+  } catch (error) {
+    console.error('Error resetting QPay PIN:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
+// Get provider's QPay discount for payment calculations
+const getProviderDiscount = async (req, res) => {
+  try {
+    const { providerId } = req.params;
+    const userId = req.user.userId;
+
+    // Validate provider ID
+    if (!providerId) {
+      return res.status(400).json({
+        success: false,
+        message: 'Provider ID is required'
+      });
+    }
+
+    // Find provider's QPay account
+    const providerQPay = await QPay.findByUserId(providerId);
+    if (!providerQPay) {
+      return res.status(404).json({
+        success: false,
+        message: 'Provider QPay account not found'
+      });
+    }
+
+    // Return provider's discount
+    res.json({
+      success: true,
+      message: 'Provider discount retrieved successfully',
+      data: {
+        discount: providerQPay.discount || 0
+      }
+    });
+
+  } catch (error) {
+    console.error('Error getting provider discount:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Internal server error'
+    });
+  }
+};
+
 module.exports = {
   registerQPayAccount,
   loginQPayAccount,
   getQPayAccount,
-  updateBalance
+  updateBalance,
+  updateDiscount,
+  resetQPayPin,
+  getProviderDiscount
 };

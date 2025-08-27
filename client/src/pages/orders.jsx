@@ -47,7 +47,11 @@ const Orders = () => {
       });
 
       const data = await response.json();
+      console.log('Load bookings response:', data);
+      
       if (data.success) {
+        console.log('Bookings loaded:', data.bookings);
+        console.log('First booking user field:', data.bookings[0]?.user);
         setBookings(data.bookings);
       } else {
         console.error('Failed to load bookings:', data.message);
@@ -81,15 +85,75 @@ const Orders = () => {
       });
 
       const data = await response.json();
+      console.log('Update booking status response:', data);
+      
       if (data.success) {
-        setBookings(prev => prev.map(booking => 
-          booking._id === bookingId ? { ...booking, status: newStatus } : booking
-        ));
+        // If the response includes the updated booking with populated data, use it
+        if (data.booking) {
+          console.log('Using populated booking data:', data.booking);
+          setBookings(prev => prev.map(booking => 
+            booking._id === bookingId ? data.booking : booking
+          ));
+        } else {
+          // Otherwise, just update the status
+          console.log('No populated data, updating status only');
+          setBookings(prev => prev.map(booking => 
+            booking._id === bookingId ? { ...booking, status: newStatus } : booking
+          ));
+        }
       } else {
         console.error('Failed to update booking status:', data.message);
       }
     } catch (error) {
       console.error('Error updating booking status:', error);
+    }
+  };
+
+  const handleRequestMoney = async (bookingId, amount, title) => {
+    try {
+      console.log('Frontend - Requesting money:', { bookingId, amount, title, amountType: typeof amount });
+      
+      const token = localStorage.getItem('token');
+      if (!token) {
+        navigate('/login');
+        return;
+      }
+
+      const requestBody = {
+        bookingId,
+        amount,
+        description: `Payment request for ${title}`
+      };
+      
+      console.log('Frontend - Request body:', requestBody);
+
+      const response = await fetch('http://localhost:5000/api/money-requests', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`
+        },
+        body: JSON.stringify(requestBody)
+      });
+
+      const data = await response.json();
+      console.log('Frontend - Response:', data);
+      
+      if (data.success) {
+        // Update the booking status to 'request' in the local state
+        setBookings(prev => prev.map(booking => 
+          booking._id === bookingId ? { ...booking, status: 'request' } : booking
+        ));
+        
+        // Show success message
+        alert('Money request sent successfully!');
+      } else {
+        console.error('Failed to create money request:', data.message);
+        alert(`Failed to create money request: ${data.message}`);
+      }
+    } catch (error) {
+      console.error('Error creating money request:', error);
+      alert('Error creating money request. Please try again.');
     }
   };
 
@@ -130,6 +194,12 @@ const Orders = () => {
   }
 
   const filteredBookings = getFilteredBookings();
+  
+  // Debug: Log the first booking to see its structure
+  if (filteredBookings.length > 0) {
+    console.log('First booking data:', filteredBookings[0]);
+    console.log('User field:', filteredBookings[0].user);
+  }
 
   return (
     <div className="dashboard-container">
@@ -214,7 +284,7 @@ const Orders = () => {
                         <div className="booking-info">
                           <h6 className="mb-1">{booking.title}</h6>
                           <p className="mb-1 text-muted">
-                            <strong>Client:</strong> {booking.user.name}
+                            <strong>Client:</strong> {booking.user?.name || 'Unknown'}
                           </p>
                           <p className="mb-1 text-muted">
                             <strong>Date:</strong> {new Date(booking.bookingDate).toLocaleDateString()}
@@ -226,7 +296,7 @@ const Orders = () => {
                           )}
                           {booking.charge && (
                             <p className="mb-0 text-success">
-                              <strong>Charge:</strong> ৳{booking.charge}
+                              <strong>Charge:</strong> {booking.charge}
                             </p>
                           )}
                         </div>
@@ -246,9 +316,9 @@ const Orders = () => {
                               <p className="text-muted">{booking.description}</p>
                               <div className="client-info">
                                 <h6>Client Information:</h6>
-                                <p className="mb-1"><strong>Name:</strong> {booking.user.name}</p>
-                                <p className="mb-1"><strong>Email:</strong> {booking.user.email}</p>
-                                <p className="mb-0"><strong>Phone:</strong> {booking.user.phone}</p>
+                                <p className="mb-1"><strong>Name:</strong> {booking.user?.name || 'Unknown'}</p>
+                                <p className="mb-1"><strong>Email:</strong> {booking.user?.email || 'N/A'}</p>
+                                <p className="mb-0"><strong>Phone:</strong> {booking.user?.phone || 'N/A'}</p>
                               </div>
                               
                               {booking.userAddress && (
@@ -291,7 +361,7 @@ const Orders = () => {
                                 {booking.status === 'completed' && (
                                   <button 
                                     className="btn btn-success btn-sm"
-                                    onClick={() => updateBookingStatus(booking._id, 'request')}
+                                    onClick={() => handleRequestMoney(booking._id, booking.charge, booking.title)}
                                   >
                                     <i className="bi bi-cash-coin me-1"></i>Request Money
                                   </button>

@@ -8,6 +8,7 @@ import '../styles/Map.css';
 import ReviewModal from '../components/ReviewModal';
 import MessageNotification from '../components/MessageNotification';
 import ProfileCard from '../components/ProfileCard';
+import FavoritesModal from '../components/FavoritesModal';
 import BookingModal from '../components/BookingModal';
 import Navbar from './navbar';
 
@@ -31,19 +32,27 @@ const createCustomMarkerIcon = (marker) => {
             <i class="bi bi-star-fill text-warning"></i>
             <span class="rating-number">${marker.averageRating || 'N/A'}</span>
           </div>
-        </div>
-        <div class="marker-card-body">
-          <p class="marker-occupation">
-            <i class="bi bi-briefcase me-1"></i>
-            ${marker.occupation || 'N/A'}
-          </p>
-          ${marker.charge ? `
-            <p class="marker-charge">
-              <i class="bi bi-currency-dollar me-1"></i>
-              ৳${marker.charge}
-            </p>
-          ` : ''}
-        </div>
+       </div>
+       <div class="marker-card-body">
+         ${marker.charge ? `
+           <div class="marker-price-row">
+             <small class="marker-price-label">Base fare</small>
+             <span class="marker-price">${marker.charge} bdt</span>
+           </div>
+         ` : ''}
+         <p class="marker-occupation">
+           <span class="occ-left">
+             <i class="bi bi-briefcase me-1"></i>
+             ${marker.occupation || 'N/A'}
+           </span>
+         </p>
+         ${marker.discount && marker.discount > 0 ? `
+           <div class="marker-discount">
+             <i class="bi bi-tag-fill"></i>
+             <span>${marker.discount}% OFF</span>
+           </div>
+         ` : ''}
+       </div>
 
       </div>
     `,
@@ -101,10 +110,6 @@ const MapControls = ({ mapRef, userLocation, onGoHome }) => {
 const UserDashboard = () => {
   const navigate = useNavigate();
   const [user, setUser] = useState(null);
-  const [searchQuery, setSearchQuery] = useState('');
-  const [suggestions, setSuggestions] = useState([]);
-  const [showSuggestions, setShowSuggestions] = useState(false);
-  const [selectedLocation, setSelectedLocation] = useState(null);
   const [markers, setMarkers] = useState([]);
   
   // Service provider search states
@@ -155,6 +160,13 @@ const UserDashboard = () => {
   const [routePolyline, setRoutePolyline] = useState(null);
   const [isCalculatingRoute, setIsCalculatingRoute] = useState(false);
   const [routeError, setRouteError] = useState(null);
+  const [showFavoritesModal, setShowFavoritesModal] = useState(false);
+  
+  // Search results states
+  const [searchResults, setSearchResults] = useState([]);
+  const [showSearchResults, setShowSearchResults] = useState(false);
+  const [sortBy, setSortBy] = useState('name'); // 'name', 'price', 'distance'
+  const [sortOrder, setSortOrder] = useState('asc'); // 'asc', 'desc'
   
   // Floating search UI state
   const [isSearchExpanded, setIsSearchExpanded] = useState(() => {
@@ -289,16 +301,21 @@ const UserDashboard = () => {
         // Fetch ratings for favorite providers
         const favoritesWithRatings = await Promise.all(
           favoritesList.map(async (favorite) => {
-            if (favorite.serviceProvider && favorite.serviceProvider.id) {
-              const ratingData = await fetchProviderRating(favorite.serviceProvider.id);
-              return {
-                ...favorite,
-                serviceProvider: {
-                  ...favorite.serviceProvider,
-                  averageRating: ratingData.averageRating,
-                  totalReviews: ratingData.totalReviews
-                }
-              };
+            const sp = favorite.serviceProvider;
+            if (sp) {
+              const normalizedId = sp.id || sp._id;
+              if (normalizedId) {
+                const ratingData = await fetchProviderRating(normalizedId);
+                return {
+                  ...favorite,
+                  serviceProvider: {
+                    ...sp,
+                    id: normalizedId,
+                    averageRating: ratingData.averageRating,
+                    totalReviews: ratingData.totalReviews
+                  }
+                };
+              }
             }
             return favorite;
           })
@@ -309,9 +326,9 @@ const UserDashboard = () => {
         // Create a map of favorite statuses for quick lookup
         const statusMap = {};
         favoritesWithRatings.forEach(fav => {
-          if (fav.serviceProvider && fav.serviceProvider.id) {
-            statusMap[fav.serviceProvider.id] = true;
-          }
+          const sp = fav.serviceProvider;
+          const key = sp && (sp.id || sp._id);
+          if (key) statusMap[key] = true;
         });
         setFavoriteStatuses(statusMap);
       } else {
@@ -328,6 +345,7 @@ const UserDashboard = () => {
 
   // Toggle favorite status for a service provider
   const toggleFavorite = async (provider) => {
+    let providerId = provider && (provider.id || provider._id);
     try {
       const token = localStorage.getItem('token');
       if (!token) {
@@ -336,37 +354,42 @@ const UserDashboard = () => {
       }
 
       // Prevent multiple clicks
-      if (loadingFavorites[provider.id]) {
+      if (!providerId) return;
+      if (loadingFavorites[providerId]) {
         return;
       }
 
       // Set loading state
       setLoadingFavorites(prev => ({
         ...prev,
-        [provider.id]: true
+        [providerId]: true
       }));
 
-      const isCurrentlyFavorite = favoriteStatuses[provider.id];
+      const isCurrentlyFavorite = !!favoriteStatuses[providerId];
       
       // Optimistically update UI for better UX
       if (isCurrentlyFavorite) {
         // Optimistically remove from UI
         setFavoriteStatuses(prev => ({
           ...prev,
-          [provider.id]: false
+          [providerId]: false
         }));
-        setFavorites(prev => prev.filter(fav => fav.serviceProvider.id !== provider.id));
+        setFavorites(prev => prev.filter(fav => {
+          if (!fav || !fav.serviceProvider) return true;
+          const favId = fav.serviceProvider.id || fav.serviceProvider._id;
+          return favId !== providerId;
+        }));
       } else {
         // Optimistically add to UI
         setFavoriteStatuses(prev => ({
           ...prev,
-          [provider.id]: true
+          [providerId]: true
         }));
         // Create a temporary favorite object for immediate display
         const tempFavorite = {
           _id: Date.now(), // temporary ID
           user: user.id,
-          serviceProvider: provider,
+          serviceProvider: { ...provider, id: providerId },
           createdAt: new Date().toISOString(),
           addedAt: new Date().toISOString()
         };
@@ -375,7 +398,7 @@ const UserDashboard = () => {
       
       if (isCurrentlyFavorite) {
         // Remove from favorites
-        const response = await fetch(`http://localhost:5000/api/favorites/${provider.id}`, {
+        const response = await fetch(`http://localhost:5000/api/favorites/${providerId}`, {
           method: 'DELETE',
           headers: {
             'Authorization': `Bearer ${token}`
@@ -393,7 +416,7 @@ const UserDashboard = () => {
           // Revert optimistic update
           setFavoriteStatuses(prev => ({
             ...prev,
-            [provider.id]: true
+            [providerId]: true
           }));
           // Reload favorites to get correct state
           await loadUserFavorites();
@@ -401,6 +424,7 @@ const UserDashboard = () => {
         }
       } else {
         // Add to favorites
+        const tempId = `temp-${providerId}-${Date.now()}`;
         const response = await fetch('http://localhost:5000/api/favorites', {
           method: 'POST',
           headers: {
@@ -408,7 +432,7 @@ const UserDashboard = () => {
             'Authorization': `Bearer ${token}`
           },
           body: JSON.stringify({
-            serviceProviderId: provider.id
+            serviceProviderId: providerId
           })
         });
 
@@ -417,17 +441,15 @@ const UserDashboard = () => {
         if (data.success) {
           showNotification(`${provider.name} added to favorites`, 'success');
           // Replace temporary favorite with real one
-          setFavorites(prev => prev.map(fav => 
-            fav._id === Date.now() ? data.favorite : fav
-          ));
+          setFavorites(prev => prev.map(fav => (fav && fav._id === tempId) ? data.favorite : fav));
         } else {
           console.error('❌ Failed to add to favorites:', data.message);
           // Revert optimistic update
           setFavoriteStatuses(prev => ({
             ...prev,
-            [provider.id]: false
+            [providerId]: false
           }));
-          setFavorites(prev => prev.filter(fav => fav._id !== Date.now()));
+          setFavorites(prev => prev.filter(fav => fav && fav._id !== tempId));
           showNotification(`Failed to add to favorites: ${data.message}`, 'error');
         }
       }
@@ -440,57 +462,98 @@ const UserDashboard = () => {
       // Clear loading state
       setLoadingFavorites(prev => ({
         ...prev,
-        [provider.id]: false
+        [providerId]: false
       }));
     }
   };
 
-  // Geocoding function using Nominatim (OpenStreetMap's geocoding service)
-  const searchLocation = async (query) => {
-    if (query.length < 3) {
-      setSuggestions([]);
-      setShowSuggestions(false);
-      return;
-    }
 
+  // Search providers by address keywords and plot markers
+  const searchProvidersByAddress = async (rawQuery) => {
+    const query = (rawQuery || '').trim();
+    if (query.length < 2) return;
     try {
-      const response = await fetch(
-        `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&limit=5`
-      );
-      const data = await response.json();
-      setSuggestions(data);
-      setShowSuggestions(true);
-    } catch (error) {
-      console.error('Error searching location:', error);
+      const resp = await fetch(`http://localhost:5000/api/auth/search-service-providers?query=${encodeURIComponent(query)}`);
+      const data = await resp.json();
+      const matches = data.serviceProviders || [];
+
+      if (matches.length === 0) {
+        showNotification('No providers matched this address search', 'info');
+        setSearchResults([]);
+        setShowSearchResults(false);
+        return;
+      }
+
+      const newMarkers = await Promise.all(matches.map(async (provider) => {
+        const ratingData = await fetchProviderRating(provider.id);
+        
+        // Fetch discount information for the provider
+        let discount = 0;
+        try {
+          const discountResp = await fetch(`http://localhost:5000/api/qpay/account`, {
+            headers: {
+              'Authorization': `Bearer ${localStorage.getItem('token')}`
+            }
+          });
+          if (discountResp.ok) {
+            const discountData = await discountResp.json();
+            discount = discountData.data?.discount || 0;
+          }
+        } catch (error) {
+          console.error('Error fetching discount for provider:', provider.id, error);
+        }
+        
+        return {
+          id: `provider-${provider.id}`,
+          providerId: provider.id,
+          position: [provider.latitude, provider.longitude],
+          name: provider.name,
+          type: 'Service Provider',
+          occupation: provider.occupation,
+          phone: provider.phone,
+          charge: provider.charge,
+          averageRating: ratingData.averageRating,
+          totalReviews: ratingData.totalReviews,
+          discount: discount
+        };
+      }));
+
+      setMarkers(newMarkers);
+      
+      // Prepare search results with distance calculations for sidebar
+      const resultsWithDistance = matches.map(provider => {
+        const ratingData = newMarkers.find(m => m.providerId === provider.id);
+        const distanceFromUser = user && user.latitude && user.longitude 
+          ? calculateDistance(user.latitude, user.longitude, provider.latitude, provider.longitude)
+          : null;
+        
+        return {
+          ...provider,
+          averageRating: ratingData?.averageRating || 'N/A',
+          totalReviews: ratingData?.totalReviews || 0,
+          distanceFromUser: distanceFromUser ? parseFloat(distanceFromUser.toFixed(1)) : null,
+          discount: ratingData?.discount || 0
+        };
+      });
+      
+      setSearchResults(resultsWithDistance);
+      setShowSearchResults(true);
+      
+      if (newMarkers.length > 1) {
+        const bounds = newMarkers.reduce((b, m) => { b.extend(m.position); return b; }, L.latLngBounds());
+        if (mapRef.current) mapRef.current.fitBounds(bounds, { padding: [20, 20] });
+      } else if (newMarkers.length === 1 && mapRef.current) {
+        mapRef.current.setView(newMarkers[0].position, 15);
+      }
+
+      showNotification(`Found ${newMarkers.length} provider(s) by address`, 'success');
+    } catch (err) {
+      console.error('Error address searching providers:', err);
+      showNotification('Address search failed', 'error');
     }
   };
 
-  const handleSearchChange = (e) => {
-    const query = e.target.value;
-    setSearchQuery(query);
-    searchLocation(query);
-  };
 
-  const handleSuggestionClick = (suggestion) => {
-    setSearchQuery(suggestion.display_name);
-    setShowSuggestions(false);
-    setSuggestions([]);
-    
-    const newMarker = {
-      id: Date.now(),
-      position: [parseFloat(suggestion.lat), parseFloat(suggestion.lon)],
-      name: suggestion.display_name,
-      type: suggestion.type
-    };
-    
-    setMarkers([newMarker]);
-    setSelectedLocation(newMarker);
-    
-    // Fly to the selected location
-    if (mapRef.current) {
-      mapRef.current.setView(newMarker.position, 15);
-    }
-  };
 
   // Service provider search function
   const searchServiceProviders = async (query) => {
@@ -549,6 +612,24 @@ const UserDashboard = () => {
         
         setMarkers(newMarkers);
         
+        // Prepare search results with distance calculations
+        const resultsWithDistance = data.serviceProviders.map(provider => {
+          const ratingData = newMarkers.find(m => m.providerId === provider.id);
+          const distanceFromUser = user && user.latitude && user.longitude 
+            ? calculateDistance(user.latitude, user.longitude, provider.latitude, provider.longitude)
+            : null;
+          
+          return {
+            ...provider,
+            averageRating: ratingData?.averageRating || 'N/A',
+            totalReviews: ratingData?.totalReviews || 0,
+            distanceFromUser: distanceFromUser ? parseFloat(distanceFromUser.toFixed(1)) : null
+          };
+        });
+        
+        setSearchResults(resultsWithDistance);
+        setShowSearchResults(true);
+        
         // If there are multiple providers, center the map to show all
         if (newMarkers.length > 1) {
           const bounds = newMarkers.reduce((bounds, marker) => {
@@ -570,6 +651,8 @@ const UserDashboard = () => {
         showNotification(`Found ${newMarkers.length} ${occupation}(s) on the map`, 'success');
       } else {
         // Show notification if no providers found
+        setSearchResults([]);
+        setShowSearchResults(false);
         showNotification(`No ${occupation} providers found`, 'info');
       }
     } catch (error) {
@@ -779,7 +862,7 @@ const UserDashboard = () => {
     setRouteData(null);
     setRoutePolyline(null);
 
-    // Show both user and provider markers when calculating route
+    // Always show user marker when calculating route
     setShowUserMarker(true);
 
     try {
@@ -952,6 +1035,51 @@ const UserDashboard = () => {
     showNotification('Route cleared', 'info');
   };
 
+  // Calculate distance between two points using Haversine formula
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Earth's radius in km
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLon = (lon2 - lon1) * Math.PI / 180;
+    const a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+              Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+              Math.sin(dLon/2) * Math.sin(dLon/2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+    return R * c;
+  };
+
+  // Sort search results based on current sort criteria
+  const getSortedResults = () => {
+    if (!searchResults.length) return [];
+    
+    return [...searchResults].sort((a, b) => {
+      let aValue, bValue;
+      
+      switch (sortBy) {
+        case 'name':
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+          break;
+        case 'price':
+          aValue = parseFloat(a.charge) || 0;
+          bValue = parseFloat(b.charge) || 0;
+          break;
+        case 'distance':
+          aValue = a.distanceFromUser || 0;
+          bValue = b.distanceFromUser || 0;
+          break;
+        default:
+          aValue = a.name.toLowerCase();
+          bValue = b.name.toLowerCase();
+      }
+      
+      if (sortOrder === 'asc') {
+        return aValue > bValue ? 1 : -1;
+      } else {
+        return aValue < bValue ? 1 : -1;
+      }
+    });
+  };
+
   // Sidebar resize functionality
   const handleResizeStart = (e) => {
     e.preventDefault();
@@ -986,6 +1114,22 @@ const UserDashboard = () => {
     localStorage.setItem('floatingSearchPos', JSON.stringify(floatingSearchPos));
   }, [floatingSearchPos]);
 
+  // Add sidebar resize event listeners
+  useEffect(() => {
+    const handleMouseMove = (e) => handleResizeMove(e);
+    const handleMouseUp = () => handleResizeEnd();
+    
+    if (isResizing) {
+      document.addEventListener('mousemove', handleMouseMove);
+      document.addEventListener('mouseup', handleMouseUp);
+    }
+    
+    return () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+  }, [isResizing]);
+
   // Close floating suggestions when clicking outside
   useEffect(() => {
     const onDocMouseDown = (e) => {
@@ -1006,19 +1150,46 @@ const UserDashboard = () => {
       setShowFloatingSuggestions(false);
       return;
     }
-    const uniques = getUniqueOccupations();
-    const filtered = uniques
-      .filter(o => o && o.toLowerCase().includes(query.toLowerCase()))
-      .slice(0, 8);
-    setFloatingSuggestions(filtered);
-    setShowFloatingSuggestions(filtered.length > 0);
+    
+    // Check if query looks like a location (contains common location words)
+    const locationKeywords = ['road', 'street', 'avenue', 'lane', 'drive', 'place', 'close', 'way', 'crescent', 'circle', 'square', 'park', 'area', 'district', 'city', 'town', 'village', 'upazila', 'thana', 'dhaka', 'chittagong', 'sylhet', 'rajshahi', 'khulna', 'barisal', 'rangpur', 'mymensingh'];
+    const isLocationQuery = locationKeywords.some(keyword => 
+      query.toLowerCase().includes(keyword.toLowerCase())
+    );
+    
+    if (isLocationQuery) {
+      // For location queries, show location suggestions
+      setFloatingSuggestions([`📍 Search "${query}" for service providers`]);
+      setShowFloatingSuggestions(true);
+    } else {
+      // For occupation queries, show occupation suggestions
+      const uniques = getUniqueOccupations();
+      const filtered = uniques
+        .filter(o => o && o.toLowerCase().includes(query.toLowerCase()))
+        .slice(0, 8);
+      setFloatingSuggestions(filtered);
+      setShowFloatingSuggestions(filtered.length > 0);
+    }
   };
 
   const executeFloatingSearch = (term) => {
     const q = (term ?? floatingSearchQuery).trim();
     if (q.length >= 2) {
-      searchByOccupation(q);
-      setShowFloatingSuggestions(false);
+      // Check if query looks like a location
+      const locationKeywords = ['road', 'street', 'avenue', 'lane', 'drive', 'place', 'close', 'way', 'crescent', 'circle', 'square', 'park', 'area', 'district', 'city', 'town', 'village', 'upazila', 'thana', 'dhaka', 'chittagong', 'sylhet', 'rajshahi', 'khulna', 'barisal', 'rangpur', 'mymensingh'];
+      const isLocationQuery = locationKeywords.some(keyword => 
+        q.toLowerCase().includes(keyword.toLowerCase())
+      );
+      
+      if (isLocationQuery) {
+        // Execute location search
+        searchProvidersByAddress(q);
+        setShowFloatingSuggestions(false);
+      } else {
+        // Execute occupation search
+        searchByOccupation(q);
+        setShowFloatingSuggestions(false);
+      }
     }
   };
 
@@ -1064,6 +1235,7 @@ const UserDashboard = () => {
 
   const toggleSidebar = () => {
     const newCollapsedState = !isSidebarCollapsed;
+    console.log('Toggling sidebar:', { current: isSidebarCollapsed, new: newCollapsedState });
     setIsSidebarCollapsed(newCollapsedState);
     localStorage.setItem('sidebarCollapsed', JSON.stringify(newCollapsedState));
   };
@@ -1128,6 +1300,8 @@ const UserDashboard = () => {
     };
   }, [markers]);
 
+
+
   // Handle click outside to close suggestions
   useEffect(() => {
     const handleClickOutside = (event) => {
@@ -1174,6 +1348,7 @@ const UserDashboard = () => {
     return (
     <div className="dashboard-container">
       <Navbar />
+      
       <div className="container-fluid">
 
         <div className="map-container">
@@ -1198,454 +1373,225 @@ const UserDashboard = () => {
             >
               <i className={`bi bi-chevron-${isSidebarCollapsed ? 'right' : 'left'}`}></i>
             </button>
+
             
             {/* Sidebar Content */}
             <div className="sidebar-content">
-            <h3>Location Search</h3>
-            <div className="search-container">
-              <input
-                type="text"
-                className="search-input"
-                placeholder="Search for a location..."
-                value={searchQuery}
-                onChange={handleSearchChange}
-                onFocus={() => setShowSuggestions(true)}
-              />
-              {showSuggestions && suggestions.length > 0 && (
-                <div className="search-suggestions">
-                  {suggestions.map((suggestion, index) => (
-                    <div
-                      key={index}
-                      className="suggestion-item"
-                      onClick={() => handleSuggestionClick(suggestion)}
-                    >
-                      {suggestion.display_name}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
+            {/* Top spacing for collapsible button */}
+            <div className="sidebar-top-spacing"></div>
             
-            {selectedLocation && (
-              <div className="selected-location">
-                <h5>Selected Location:</h5>
-                <p className="mb-1"><strong>{selectedLocation.name}</strong></p>
-                <p className="text-muted small">
-                  Type: {selectedLocation.type}
-                </p>
-              </div>
-            )}
+            <button 
+              className="sidebar-wide-button favourite-list-button"
+              onClick={() => setShowFavoritesModal(true)}
+              type="button"
+              title="Open Favourite Providers"
+            >
+              <i className="bi bi-heart me-2"></i>
+              Favourite List
+            </button>
 
-            <hr className="my-4" />
-            
-            <h3>Service Provider Search</h3>
-            <div className="search-container">
-              <div className="search-input-group">
-                <input
-                  type="text"
-                  className="search-input"
-                  placeholder="Search by name or occupation... (Press Enter to search by occupation)"
-                  value={providerSearchQuery}
-                  onChange={handleProviderSearchChange}
-                  onKeyDown={handleProviderSearchKeyDown}
-                  onFocus={() => setShowProviderSuggestions(true)}
-                />
-                <button
-                  className="search-button"
-                  onClick={() => {
-                    if (providerSearchQuery.trim().length >= 2) {
-                      searchByOccupation(providerSearchQuery.trim());
-                    }
-                  }}
-                  title="Search manually (or click suggestions above)"
+            {/* Quick Links Section */}
+            <div className="quick-links-section">
+              <h5 className="quick-links-title">
+                <i className="bi bi-lightning me-2"></i>
+                Quick Links
+              </h5>
+              <div className="quick-links-grid">
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Plumber')}
+                  type="button"
+                  title="Find Plumbers"
                 >
-                  <i className="bi bi-search"></i>
+                  <i className="bi bi-tools"></i>
+                  <span>Plumber</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Electrician')}
+                  type="button"
+                  title="Find Electricians"
+                >
+                  <i className="bi bi-lightning-charge"></i>
+                  <span>Electrician</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Painter')}
+                  type="button"
+                  title="Find Painters"
+                >
+                  <i className="bi bi-palette"></i>
+                  <span>Painter</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Carpenter')}
+                  type="button"
+                  title="Find Carpenters"
+                >
+                  <i className="bi bi-hammer"></i>
+                  <span>Carpenter</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Technician')}
+                  type="button"
+                  title="Find Technicians"
+                >
+                  <i className="bi bi-gear"></i>
+                  <span>Technician</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Cleaner')}
+                  type="button"
+                  title="Find Cleaners"
+                >
+                  <i className="bi bi-brush"></i>
+                  <span>Cleaner</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Pest Controller')}
+                  type="button"
+                  title="Find Pest Controllers"
+                >
+                  <i className="bi bi-shield-check"></i>
+                  <span>Pest Controller</span>
+                </button>
+                
+                <button 
+                  className="quick-link-btn"
+                  onClick={() => searchByOccupation('Bike Repairer')}
+                  type="button"
+                  title="Find Bike Repairers"
+                >
+                  <i className="bi bi-bicycle"></i>
+                  <span>Bike Repairer</span>
                 </button>
               </div>
-              
-              {/* Occupation Suggestions */}
-              {showOccupationSuggestions && occupationSuggestions.length > 0 && (
-                <div className="search-suggestions">
-                  {occupationSuggestions.map((occupation, index) => (
-                    <div
-                      key={index}
-                      className="suggestion-item occupation-suggestion"
-                      onClick={() => {
-                        searchByOccupation(occupation);
-                        setProviderSearchQuery(occupation);
-                        setShowOccupationSuggestions(false);
-                      }}
-                    >
-                      <i className="bi bi-briefcase me-2"></i>
-                      <strong>{occupation}</strong>
-                      <small className="text-muted ms-2">
-                        ({allProviders.filter(p => p.occupation === occupation).length} providers)
-                      </small>
+            </div>
+
+            {/* Search Results Section */}
+            {showSearchResults && searchResults.length > 0 && (
+              <>
+                <div className="search-results-section">
+                  <div className="search-results-header">
+                    <h5 className="mb-3">
+                      <i className="bi bi-search me-2"></i>
+                      Search Results ({searchResults.length})
+                    </h5>
+                    
+                    {/* Sort Controls */}
+                    <div className="sort-controls mb-3">
+                      <div className="sort-row">
+                        <label className="sort-label">Sort by:</label>
+                        <select 
+                          className="sort-select"
+                          value={sortBy}
+                          onChange={(e) => setSortBy(e.target.value)}
+                        >
+                          <option value="name">Name</option>
+                          <option value="price">Base fare</option>
+                          <option value="distance">Distance</option>
+                        </select>
+                      </div>
+                      <div className="sort-row">
+                        <label className="sort-label">Order:</label>
+                        <select 
+                          className="order-select"
+                          value={sortOrder}
+                          onChange={(e) => setSortOrder(e.target.value)}
+                        >
+                          <option value="asc">Low to High</option>
+                          <option value="desc">High to Low</option>
+                        </select>
+                      </div>
                     </div>
-                  ))}
-                </div>
-              )}
-              
-              {/* Provider Suggestions Available Indicator */}
-              {!showOccupationSuggestions && providerSuggestions.length > 0 && !showProviderSuggestions && (
-                <div className="provider-suggestions-indicator">
+                  </div>
+                  
+                  {/* Results List */}
+                  <div className="search-results-list">
+                    {getSortedResults().map((provider, index) => (
+                      <div key={provider.id} className="search-result-item">
+                        <div className="result-main-info">
+                          <div className="result-name">{provider.name}</div>
+                          <div className="result-occupation">{provider.occupation}</div>
+                        </div>
+                        <div className="result-details">
+                          <div className="result-rating">
+                            <i className="bi bi-star-fill text-warning"></i>
+                            <span>{provider.averageRating}</span>
+                            <small className="text-muted">({provider.totalReviews})</small>
+                          </div>
+                          <div className="result-price">{provider.charge} bdt</div>
+                          {provider.distanceFromUser && (
+                            <div className="result-distance">
+                              <i className="bi bi-geo-alt"></i>
+                              {provider.distanceFromUser} km
+                            </div>
+                          )}
+                        </div>
+                        <div className="result-actions">
+                          <button
+                            className="result-action-btn"
+                            onClick={() => openProfileCard(provider)}
+                            title="View Profile"
+                          >
+                            <i className="bi bi-eye"></i>
+                          </button>
+                          <button
+                            className="result-action-btn"
+                            onClick={() => handleProviderSuggestionClick(provider)}
+                            title="Show on Map"
+                          >
+                            <i className="bi bi-map"></i>
+                          </button>
+                          <button
+                            className="result-action-btn"
+                            onClick={() => {
+                              setShowUserMarker(true);
+                              calculateRoute(provider);
+                            }}
+                            title="Get Route"
+                          >
+                            <i className="bi bi-signpost-2"></i>
+                          </button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Clear Results Button */}
                   <button
-                    className="btn btn-sm btn-outline-info"
-                    onClick={displayProviderSuggestions}
+                    className="sidebar-wide-button clear-results-button"
+                    onClick={() => {
+                      setShowSearchResults(false);
+                      setSearchResults([]);
+                    }}
                     type="button"
                   >
-                    <i className="bi bi-people me-1"></i>
-                    Show {providerSuggestions.length} provider suggestion{providerSuggestions.length !== 1 ? 's' : ''}
+                    <i className="bi bi-x-circle me-2"></i>
+                    Clear Results
                   </button>
                 </div>
-              )}
-              
-              {showProviderSuggestions && providerSuggestions.length > 0 && (
-                <div className="search-suggestions">
-                  {providerSuggestions.map((provider, index) => (
-                    <div
-                      key={index}
-                      className="suggestion-item"
-                    >
-                      <div 
-                        className="suggestion-info"
-                        onClick={() => {
-                          handleProviderSuggestionClick(provider);
-                          setShowProviderSuggestions(false);
-                        }}
-                      >
-                        <strong>{provider.name}</strong>
-                        <br />
-                        <small className="text-muted">{provider.occupation}</small>
-                      </div>
-                      <div className="suggestion-actions">
-                        <button 
-                          className="btn btn-sm btn-outline-secondary me-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            openProfileCard(provider);
-                            setShowProviderSuggestions(false);
-                          }}
-                          title="View Profile"
-                        >
-                          <i className="bi bi-person"></i>
-                        </button>
-                        <button 
-                          className="btn btn-sm btn-outline-primary me-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleProviderSuggestionClick(provider);
-                            setShowProviderSuggestions(false);
-                          }}
-                          title="Show on Map"
-                        >
-                          <i className="bi bi-geo-alt"></i>
-                        </button>
-                        <button 
-                          className="btn btn-sm btn-outline-warning me-1"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            calculateRoute(provider);
-                            setShowProviderSuggestions(false);
-                          }}
-                          title="Show Route"
-                        >
-                          <i className="bi bi-signpost-2"></i>
-                        </button>
-                        <button 
-                          className="btn btn-sm btn-outline-success"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            navigate(`/chatbox?providerId=${provider.id}`);
-                            setShowProviderSuggestions(false);
-                          }}
-                          title="Send Message"
-                        >
-                          <i className="bi bi-envelope"></i>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-            
-            {selectedProvider && (
-              <div className="selected-location">
-                <div className="d-flex justify-content-between align-items-start mb-2">
-                  <h5 className="mb-0">Selected Service Provider:</h5>
-                  <button 
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={() => openProfileCard(selectedProvider)}
-                    title="View Profile"
-                  >
-                    <i className="bi bi-person"></i> View Profile
-                  </button>
-                </div>
-                <p className="mb-1"><strong>{selectedProvider.name}</strong></p>
-                <p className="text-muted small mb-1">
-                  Occupation: {selectedProvider.occupation}
-                </p>
-                <p className="text-muted small">
-                  Phone: {selectedProvider.phone}
-                </p>
-              </div>
+              </>
             )}
 
-            <hr className="my-4" />
-            
-            <h5>All Service Providers</h5>
-            <div className="all-providers-list">
-              {allProviders.length > 0 ? (
-                allProviders.map((provider, index) => (
-                  <div
-                    key={index}
-                    className="provider-item"
-                    onClick={() => handleProviderSuggestionClick(provider)}
-                  >
-                    <div className="provider-info">
-                      <strong>{provider.name}</strong>
-                      <br />
-                      <small className="text-muted">{provider.occupation}</small>
-                      <div className="provider-rating-charge">
-                        <small className="text-warning me-2">
-                          <i className="bi bi-star-fill"></i> {provider.averageRating || 'N/A'}
-                        </small>
-                        {provider.charge && (
-                          <small className="text-success">
-                            <i className="bi bi-currency-dollar"></i> ৳{provider.charge}
-                          </small>
-                        )}
-                      </div>
-                    </div>
-                    <div className="provider-actions">
-                      <button 
-                        className="btn btn-sm btn-outline-secondary me-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openProfileCard(provider);
-                        }}
-                        title="View Profile"
-                      >
-                        <i className="bi bi-person"></i>
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-primary me-2"
-                        onClick={() => handleProviderSuggestionClick(provider)}
-                      >
-                        <i className="bi bi-geo-alt"></i> Show on Map
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-info me-2"
-                        onClick={() => openReviewModal(provider)}
-                        title="View Reviews & Comments"
-                      >
-                        <i className="bi bi-chat-dots"></i>
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-warning me-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          calculateRoute(provider);
-                        }}
-                        title="Show Route"
-                      >
-                        <i className="bi bi-signpost-2"></i>
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-success me-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          navigate(`/chatbox?providerId=${provider.id}`);
-                        }}
-                        title="Send Message"
-                      >
-                        <i className="bi bi-envelope"></i>
-                      </button>
-
-                      <button 
-                        className={`btn btn-sm ${favoriteStatuses[provider.id] ? 'btn-danger' : 'btn-outline-danger'} ${loadingFavorites[provider.id] ? 'heart-loading' : ''}`}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleFavorite(provider);
-                        }}
-                        title={favoriteStatuses[provider.id] ? 'Remove from Favorites' : 'Add to Favorites'}
-                        disabled={loadingFavorites[provider.id]}
-                        style={{
-                          transition: 'all 0.2s ease-in-out',
-                          transform: favoriteStatuses[provider.id] ? 'scale(1.1)' : 'scale(1)'
-                        }}
-                      >
-                        <i className={`bi ${favoriteStatuses[provider.id] ? 'bi-heart-fill' : 'bi-heart'}`}></i>
-                        {loadingFavorites[provider.id] ? ' ⏳' : favoriteStatuses[provider.id] ? ' ❤️' : ' 🤍'}
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center p-3">
-                  <p className="text-muted mb-2">No service providers found</p>
-                  <small className="text-muted">
-                    Service providers will appear here once they register
-                  </small>
-                </div>
-              )}
-            </div>
-
-            <hr className="my-4" />
-            
-            <div className="d-flex justify-content-between align-items-center mb-3">
-              <h5 className="mb-0">My Favorite Providers</h5>
-              <button 
-                className="btn btn-sm btn-outline-secondary"
-                onClick={() => loadUserFavorites()}
-                title="Refresh Favorites"
-              >
-                <i className="bi bi-arrow-clockwise"></i>
-              </button>
-            </div>
-            <div className="favorites-list">
-              {favorites.length > 0 ? (
-                favorites.map((favorite, index) => (
-                  <div key={favorite._id || index} className="favorite-item">
-                    <div className="favorite-info">
-                      <strong>{favorite.serviceProvider.name}</strong>
-                      <br />
-                      <small className="text-muted">{favorite.serviceProvider.occupation}</small>
-                      <div className="provider-rating-charge">
-                        <small className="text-warning me-2">
-                          <i className="bi bi-star-fill"></i> {favorite.serviceProvider.averageRating || 'N/A'}
-                        </small>
-                        {favorite.serviceProvider.charge && (
-                          <small className="text-success">
-                            <i className="bi bi-currency-dollar"></i> ৳{favorite.serviceProvider.charge}
-                          </small>
-                        )}
-                      </div>
-                      <br />
-                      <small className="text-muted">Added: {new Date(favorite.addedAt || favorite.createdAt).toLocaleDateString()}</small>
-                    </div>
-                    <div className="favorite-actions">
-                      <button 
-                        className="btn btn-sm btn-outline-secondary me-2"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          openProfileCard(favorite.serviceProvider);
-                        }}
-                        title="View Profile"
-                      >
-                        <i className="bi bi-person"></i>
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-primary me-2"
-                        onClick={() => handleProviderSuggestionClick(favorite.serviceProvider)}
-                      >
-                        <i className="bi bi-geo-alt"></i> Show on Map
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-info me-2"
-                        onClick={() => openReviewModal(favorite.serviceProvider)}
-                        title="View Reviews & Comments"
-                      >
-                        <i className="bi bi-chat-dots"></i>
-                      </button>
-                      <button 
-                        className="btn btn-sm btn-outline-warning me-2"
-                        onClick={() => calculateRoute(favorite.serviceProvider)}
-                        title="Show Route"
-                      >
-                        <i className="bi bi-signpost-2"></i>
-                      </button>
-
-                      <button 
-                        className="btn btn-sm btn-danger"
-                        onClick={() => toggleFavorite(favorite.serviceProvider)}
-                        title="Remove from Favorites"
-                      >
-                        <i className="bi bi-heart-fill"></i>
-                      </button>
-                    </div>
-                  </div>
-                ))
-              ) : (
-                <div className="text-center p-3">
-                  <p className="text-muted mb-2">No favorite providers yet</p>
-                  <small className="text-muted">
-                    Click the heart icon next to any service provider to add them to your favorites
-                  </small>
-                </div>
-              )}
-            </div>
           </div> {/* End sidebar-content */}
           
-          {/* Route Information Section */}
-          {routeData && (
-            <>
-              <hr className="my-4" />
-              <div className="route-info-section">
-                <div className="d-flex justify-content-between align-items-center mb-3">
-                  <h5 className="mb-0">
-                    <i className="bi bi-signpost-2 text-warning me-2"></i>
-                    Route to {routeData.provider.name}
-                    {routeData.isEstimated ? (
-                      <span className="badge bg-warning text-dark ms-2">Simulated</span>
-                    ) : (
-                      <span className="badge bg-success text-white ms-2">Real Route</span>
-                    )}
-                  </h5>
-                  <button 
-                    className="btn btn-sm btn-outline-secondary"
-                    onClick={clearRoute}
-                    title="Clear Route"
-                  >
-                    <i className="bi bi-x-lg"></i>
-                  </button>
-                </div>
-                
-                <div className="route-details">
-                  <div className="distance-info mb-3">
-                    <div className="distance-badge mb-2">
-                      <i className="bi bi-arrow-right-circle me-2"></i>
-                      {routeData.distance} km
-                    </div>
-                    <div className="estimated-time">
-                      <i className="bi bi-clock me-1"></i>
-                      Estimated time: {routeData.duration} minutes
-                      {routeData.isEstimated && (
-                        <span className="text-muted ms-1">(approximate)</span>
-                      )}
-                    </div>
-                  </div>
-                  
-                  <div className="provider-route-info">
-                    <p className="mb-1">
-                      <strong>From:</strong> Your Location
-                    </p>
-                    <p className="mb-1">
-                      <strong>To:</strong> {routeData.provider.name} ({routeData.provider.occupation})
-                    </p>
-                    <p className="mb-0">
-                      <strong>Address:</strong> {routeData.provider.address || 'Location coordinates available'}
-                    </p>
-                  </div>
-                  
-                  {routeData.isEstimated && (
-                    <div className="alert alert-warning mt-3 mb-0">
-                      <i className="bi bi-info-circle me-2"></i>
-                      <small>
-                        This is a road simulation. For exact street routing, please try again later when routing services are available.
-                      </small>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </>
-          )}
+
 
           {/* Route Error Display */}
           {routeError && (
             <>
-              <hr className="my-4" />
               <div className="alert alert-danger">
                 <i className="bi bi-exclamation-triangle me-2"></i>
                 <strong>Route Error:</strong> {routeError}
@@ -1662,7 +1608,6 @@ const UserDashboard = () => {
           {/* Route Loading State */}
           {isCalculatingRoute && (
             <>
-              <hr className="my-4" />
               <div className="text-center p-3">
                 <div className="spinner-border text-primary" role="status">
                   <span className="visually-hidden">Loading...</span>
@@ -1673,12 +1618,206 @@ const UserDashboard = () => {
           )}
         </div> {/* End sidebar */}
 
+        {/* Route Information Panel - Right of Sidebar */}
+        {routeData && (
+          <div className="route-panel">
+            <div className="route-panel-header">
+              <h5 className="mb-0">
+                <i className="bi bi-signpost-2 text-warning me-2"></i>
+                Route to {routeData.provider.name}
+                {routeData.isEstimated && (
+                  <span className="badge bg-warning text-dark ms-2">Simulated</span>
+                )}
+              </h5>
+              <button 
+                className="route-panel-close"
+                onClick={clearRoute}
+                title="Clear Route"
+              >
+                <i className="bi bi-x-lg"></i>
+              </button>
+            </div>
+            
+            <div className="route-panel-content">
+              <div className="distance-info mb-3">
+                <div className="distance-badge mb-2">
+                  <i className="bi bi-arrow-right-circle me-2"></i>
+                  {routeData.distance} km
+                </div>
+                <div className="estimated-time">
+                  <i className="bi bi-clock me-1"></i>
+                  Estimated time: {routeData.duration} minutes
+                  {routeData.isEstimated && (
+                    <span className="text-muted ms-1">(approximate)</span>
+                  )}
+                </div>
+              </div>
+              
+              <div className="route-details-card">
+                <div className="route-detail-item">
+                  <div className="detail-icon">
+                    <i className="bi bi-arrow-right"></i>
+                  </div>
+                  <div className="detail-content">
+                    <div className="detail-label">Route</div>
+                    <div className="detail-value">
+                      <span className="route-from">Home</span>
+                      <i className="bi bi-arrow-right mx-2"></i>
+                      <span className="route-to">{routeData.provider.name}</span>
+                    </div>
+                  </div>
+                </div>
+                
+                <div className="route-detail-item">
+                  <div className="detail-icon">
+                    <i className="bi bi-pin-map-fill"></i>
+                  </div>
+                  <div className="detail-content">
+                    <div className="detail-label">Address</div>
+                    <div className="detail-value">{routeData.provider.address || 'Location coordinates available'}</div>
+                  </div>
+                </div>
+              </div>
+              
+              {/* Action Buttons */}
+              <div className="route-action-buttons">
+                <button 
+                  className="route-action-btn reviews-btn"
+                  onClick={() => {
+                    openReviewModal(routeData.provider);
+                    clearRoute();
+                  }}
+                  title="View Reviews"
+                >
+                  <i className="bi bi-star-fill"></i>
+                  <span>Reviews</span>
+                </button>
+                
+                <button 
+                  className="route-action-btn message-btn"
+                  onClick={() => {
+                    navigate(`/chatbox?providerId=${routeData.provider.id}`);
+                    clearRoute();
+                  }}
+                  title="Send Message"
+                >
+                  <i className="bi bi-chat-dots-fill"></i>
+                  <span>Message</span>
+                </button>
+                
+                <button 
+                  className="route-action-btn booking-btn"
+                  onClick={() => {
+                    openBookingModal(routeData.provider);
+                    clearRoute();
+                  }}
+                  title="Book Now"
+                >
+                  <i className="bi bi-calendar-check-fill"></i>
+                  <span>Book Now</span>
+                </button>
+              </div>
+              
+              {routeData.isEstimated && (
+                <div className="route-simulation-notice">
+                  <i className="bi bi-info-circle me-2"></i>
+                  <small>
+                    This is a road simulation. For exact street routing, please try again later when routing services are available.
+                  </small>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+
           {/* Map Area */}
           <div 
             className="map-area"
             style={{ width: isSidebarCollapsed ? 'calc(100% - 50px)' : `calc(100% - ${sidebarWidth}%)` }}
             ref={mapAreaRef}
           >
+            {/* Map Quick Links Overlay */}
+            <div className="map-quick-links">
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Plumber')}
+                type="button"
+                title="Find Plumbers"
+              >
+                <i className="bi bi-tools"></i>
+                <span>Plumber</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Electrician')}
+                type="button"
+                title="Find Electricians"
+              >
+                <i className="bi bi-lightning-charge"></i>
+                <span>Electrician</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Painter')}
+                type="button"
+                title="Find Painters"
+              >
+                <i className="bi bi-palette"></i>
+                <span>Painter</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Carpenter')}
+                type="button"
+                title="Find Carpenters"
+              >
+                <i className="bi bi-hammer"></i>
+                <span>Carpenter</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Technician')}
+                type="button"
+                title="Find Technicians"
+              >
+                <i className="bi bi-gear"></i>
+                <span>Technician</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Cleaner')}
+                type="button"
+                title="Find Cleaners"
+              >
+                <i className="bi bi-brush"></i>
+                <span>Cleaner</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Pest Controller')}
+                type="button"
+                title="Find Pest Controllers"
+              >
+                <i className="bi bi-shield-check"></i>
+                <span>Pest Controller</span>
+              </button>
+              
+              <button 
+                className="map-quick-link-btn"
+                onClick={() => searchByOccupation('Bike Repairer')}
+                type="button"
+                title="Find Bike Repairers"
+              >
+                <i className="bi bi-bicycle"></i>
+                <span>Bike Repairer</span>
+              </button>
+            </div>
             {/* Floating draggable/collapsible search */}
             <div
               ref={floatingSearchRef}
@@ -1701,7 +1840,7 @@ const UserDashboard = () => {
               <input
                 className="search-input"
                 type="text"
-                placeholder="Search occupation..."
+                placeholder="Search occupation or location..."
                 value={floatingSearchQuery}
                 onChange={(e) => { setFloatingSearchQuery(e.target.value); updateFloatingSuggestions(e.target.value); }}
                 onFocus={() => { if (floatingSuggestions.length > 0) setShowFloatingSuggestions(true); }}
@@ -1719,15 +1858,32 @@ const UserDashboard = () => {
               {/* Suggestions dropdown */}
               {isSearchExpanded && showFloatingSuggestions && floatingSuggestions.length > 0 && (
                 <div className="floating-search-suggestions">
-                  {floatingSuggestions.map((s, idx) => (
-                    <div
-                      key={`${s}-${idx}`}
-                      className="floating-suggestion-item"
-                      onClick={() => { setFloatingSearchQuery(s); executeFloatingSearch(s); }}
-                    >
-                      <i className="bi bi-briefcase me-2"></i>{s}
-                    </div>
-                  ))}
+                  {floatingSuggestions.map((s, idx) => {
+                    // Check if this is a location suggestion
+                    const isLocationSuggestion = s.startsWith('📍');
+                    
+                    return (
+                      <div
+                        key={`${s}-${idx}`}
+                        className="floating-suggestion-item"
+                        onClick={() => { 
+                          if (isLocationSuggestion) {
+                            // For location suggestions, extract the query and search
+                            const query = s.replace('📍 Search "', '').replace('" for service providers', '');
+                            setFloatingSearchQuery(query);
+                            executeFloatingSearch(query);
+                          } else {
+                            // For occupation suggestions, use as is
+                            setFloatingSearchQuery(s);
+                            executeFloatingSearch(s);
+                          }
+                        }}
+                      >
+                        <i className={`bi ${isLocationSuggestion ? 'bi-geo-alt' : 'bi-briefcase'} me-2`}></i>
+                        {isLocationSuggestion ? s.replace('📍 Search "', '').replace('" for service providers', '') : s}
+                      </div>
+                    );
+                  })}
                 </div>
               )}
             </div>
@@ -1779,13 +1935,48 @@ const UserDashboard = () => {
 
               {/* Route polyline */}
               {routePolyline && (
-                <Polyline
-                  positions={routePolyline}
-                  color="#007bff"
-                  weight={4}
-                  opacity={0.8}
-                  dashArray="10, 5"
-                />
+                <>
+                  <Polyline
+                    positions={routePolyline}
+                    color="#667eea"
+                    weight={6}
+                    opacity={1}
+                    className="route-polyline"
+                    pathOptions={{
+                      color: '#667eea',
+                      weight: 6,
+                      opacity: 1,
+                      fillOpacity: 0.8,
+                      dashArray: '0',
+                      lineCap: 'round',
+                      lineJoin: 'round'
+                    }}
+                  />
+                  
+                  {/* Animated route progress indicator */}
+                  <Polyline
+                    positions={routePolyline}
+                    color="#764ba2"
+                    weight={6}
+                    opacity={1}
+                    className="route-progress"
+                    pathOptions={{
+                      color: '#764ba2',
+                      weight: 6,
+                      opacity: 1,
+                      fillOpacity: 0.8,
+                      dashArray: '0',
+                      lineCap: 'round',
+                      lineJoin: 'round'
+                    }}
+                  />
+                  
+
+                  
+
+                  
+
+                </>
               )}
               
                               <MapControls 
@@ -1811,7 +2002,6 @@ const UserDashboard = () => {
         provider={selectedProviderForProfile}
         isOpen={showProfileCard}
         onClose={closeProfileCard}
-        onShowOnMap={handleProfileCardShowOnMap}
         onOpenReviews={handleProfileCardOpenReviews}
         onSendMessage={handleProfileCardSendMessage}
         onBookNow={() => {
@@ -1826,6 +2016,12 @@ const UserDashboard = () => {
             closeProfileCard();
           }
         }}
+        onAddFavorite={() => {
+          if (selectedProviderForProfile) {
+            toggleFavorite(selectedProviderForProfile);
+          }
+        }}
+        isFavorite={selectedProviderForProfile ? !!favoriteStatuses[selectedProviderForProfile.id] : false}
       />
 
       {/* Booking Modal */}
@@ -1850,6 +2046,18 @@ const UserDashboard = () => {
           </div>
         </div>
       )}
+
+      {/* Favourites Modal */}
+      <FavoritesModal
+        isOpen={showFavoritesModal}
+        onClose={() => setShowFavoritesModal(false)}
+        favorites={favorites}
+        onOpenProfile={(provider) => { openProfileCard(provider); setShowFavoritesModal(false); }}
+        onShowOnMap={(provider) => { handleProviderSuggestionClick(provider); setShowFavoritesModal(false); }}
+        onRoute={(provider) => { calculateRoute(provider); setShowFavoritesModal(false); }}
+        onMessage={(provider) => { navigate(`/chatbox?providerId=${provider.id}`); setShowFavoritesModal(false); }}
+        onRemoveFavorite={(provider) => toggleFavorite(provider)}
+      />
     </div>
   );
 };

@@ -122,6 +122,7 @@ const getServiceProviderBookings = async (req, res) => {
 
     const bookings = await Booking.find({ serviceProvider: serviceProviderId })
       .populate('user', 'name email phone address')
+      .populate('serviceProvider', 'name email phone occupation')
       .sort({ createdAt: -1 });
 
     res.json({

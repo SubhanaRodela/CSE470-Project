@@ -107,6 +107,71 @@
   border-top: 1px solid rgba(255, 255, 255, 0.2);
 }
 
+.summary-item.discount {
+  color: #ffd700;
+  font-weight: 500;
+}
+
+.discount-value {
+  color: #ffd700;
+  font-weight: 600;
+}
+
+.summary-item.discount span:first-child {
+  color: #ffffff;
+  font-weight: 500;
+}
+
+.summary-item.final-amount {
+  font-size: 1.2rem;
+  font-weight: 700;
+  padding-top: 12px;
+  border-top: 1px solid rgba(255, 255, 255, 0.2);
+  color: #98fb98;
+}
+
+.final-amount-value {
+  color: #98fb98;
+  font-weight: 700;
+}
+
+.discount-savings {
+  background: rgba(255, 215, 0, 0.2);
+  color: #ffd700;
+  padding: 8px 12px;
+  border-radius: 8px;
+  margin-top: 12px;
+  text-align: center;
+  font-weight: 600;
+  font-size: 0.9rem;
+  border: 1px solid rgba(255, 215, 0, 0.3);
+}
+
+.discount-loading {
+  color: #ffd700;
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.discount-loading i {
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
+.summary-item.no-discount {
+  color: #b0b0b0;
+  font-style: italic;
+}
+
+.no-discount-value {
+  color: #b0b0b0;
+  font-style: italic;
+}
+
 .pin-section {
   text-align: center;
 }

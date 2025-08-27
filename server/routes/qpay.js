@@ -5,7 +5,10 @@ const {
   registerQPayAccount,
   loginQPayAccount,
   getQPayAccount,
-  updateBalance
+  updateBalance,
+  updateDiscount,
+  resetQPayPin,
+  getProviderDiscount
 } = require('../controllers/qpayController');
 
 // Register new QPay account
@@ -19,5 +22,14 @@ router.get('/account', authenticateToken, getQPayAccount);
 
 // Update QPay account balance
 router.put('/balance', authenticateToken, updateBalance);
+
+// Update QPay account discount (service providers only)
+router.put('/discount', authenticateToken, updateDiscount);
+
+// Reset QPay PIN (requires QuickFix password verification)
+router.put('/reset-pin', authenticateToken, resetQPayPin);
+
+// Get provider's QPay discount (for payment calculations)
+router.get('/provider-discount/:providerId', authenticateToken, getProviderDiscount);
 
 module.exports = router;

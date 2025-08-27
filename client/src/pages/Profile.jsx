@@ -66,7 +66,8 @@ const Profile = () => {
     confirmPassword: '',
     longitude: '',
     latitude: '',
-    address: ''
+    address: '',
+    charge: ''
   });
 
   useEffect(() => {
@@ -90,7 +91,8 @@ const Profile = () => {
       confirmPassword: '',
       longitude: userInfo.longitude || '',
       latitude: userInfo.latitude || '',
-      address: userInfo.address || ''
+      address: userInfo.address || '',
+      charge: userInfo.charge || ''
     });
 
     // Set initial map location to user's current coordinates or default
@@ -197,6 +199,16 @@ const Profile = () => {
       toast.error('Passwords do not match');
       return false;
     }
+    
+    // Validate charge for service providers
+    if (user?.userType === 'service provider' && formData.charge) {
+      const chargeValue = parseFloat(formData.charge);
+      if (isNaN(chargeValue) || chargeValue < 0) {
+        toast.error('Base service price must be a positive number');
+        return false;
+      }
+    }
+    
     return true;
   };
 
@@ -227,6 +239,11 @@ const Profile = () => {
       updateData.latitude = parseFloat(formData.latitude);
       updateData.address = formData.address; // Add address to update data
 
+      // Include charge for service providers
+      if (user.userType === 'service provider' && formData.charge) {
+        updateData.charge = parseFloat(formData.charge);
+      }
+
       console.log('Sending update data:', updateData);
       console.log('Token:', token);
       
@@ -245,7 +262,12 @@ const Profile = () => {
       localStorage.setItem('user', JSON.stringify(updatedUser));
       setUser(updatedUser);
 
-      toast.success('Profile updated successfully!');
+      // Show success message with charge update info if applicable
+      if (user.userType === 'service provider' && formData.charge) {
+        toast.success(`Profile updated successfully! Base price updated to ৳${formData.charge}`);
+      } else {
+        toast.success('Profile updated successfully!');
+      }
       
       // Clear password fields
       setFormData(prev => ({
@@ -360,6 +382,30 @@ const Profile = () => {
                       placeholder="Confirm new password"
                     />
                   </div>
+
+                  {/* Base Price Field for Service Providers */}
+                  {user?.userType === 'service provider' && (
+                    <div className="mb-3">
+                      <label htmlFor="charge" className="form-label">Base Service Price (BDT)</label>
+                      <div className="input-group">
+                        <span className="input-group-text">৳</span>
+                        <input
+                          type="number"
+                          className="form-control"
+                          id="charge"
+                          name="charge"
+                          value={formData.charge}
+                          onChange={handleInputChange}
+                          placeholder="Enter your base service price"
+                          min="0"
+                          step="0.01"
+                        />
+                      </div>
+                      <div className="form-text">
+                        This is the base price for your services. You can adjust this for specific jobs.
+                      </div>
+                    </div>
+                  )}
 
                   <hr className="my-4" />
                   <h5 className="mb-3">Location Information</h5>

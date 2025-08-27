@@ -6,13 +6,24 @@ const PDFDocument = require('pdfkit');
 const fs = require('fs');
 const path = require('path');
 
+// Calculate discounted amount
+const calculateDiscountedAmount = (baseAmount, discountPercentage) => {
+  if (discountPercentage <= 0) return baseAmount;
+  if (discountPercentage >= 100) return 0;
+  
+  const discountAmount = (baseAmount * discountPercentage) / 100;
+  return Math.max(0, baseAmount - discountAmount);
+};
+
 // Send money from user to service provider
 const sendMoney = async (req, res) => {
   try {
-    const { receiverId, amount, bookingId, pin } = req.body;
+    const { receiverId, amount, bookingId, requestId, pin } = req.body;
     const senderId = req.user.userId;
 
-    console.log('Send money request:', { senderId, receiverId, amount, bookingId });
+    console.log('Send money request:', { senderId, receiverId, amount, bookingId, requestId });
+    console.log('Request body:', req.body);
+    console.log('User from token:', req.user);
 
     // Validate input
     if (!receiverId || !amount || !pin) {
@@ -56,50 +67,114 @@ const sendMoney = async (req, res) => {
       });
     }
 
-    // Check if sender has sufficient balance
-    if (senderQPay.balance < amount) {
+    // Get service details and calculate discounted amount
+    let booking = null;
+    let serviceDetails = {};
+    let baseAmount = amount;
+    let discountedAmount = amount;
+    let discountApplied = 0;
+    
+    if (bookingId) {
+      // Populate to access provider name if needed
+      booking = await Booking.findById(bookingId).populate('serviceProvider', 'name');
+      if (booking) {
+        serviceDetails = {
+          serviceName: booking.title,
+          serviceProvider: booking.serviceProvider && booking.serviceProvider.name ? booking.serviceProvider.name : 'Unknown',
+          serviceDate: booking.bookingDate
+        };
+        // Use provider's base fare from booking and provider's discount
+        baseAmount = parseFloat(booking.charge) || 0;
+        if (receiverQPay.discount > 0 && baseAmount > 0) {
+          discountedAmount = calculateDiscountedAmount(baseAmount, receiverQPay.discount);
+          discountApplied = receiverQPay.discount;
+        } else {
+          discountedAmount = baseAmount;
+          discountApplied = 0;
+        }
+      }
+    } else if (requestId) {
+      // Get money request details
+      const MoneyRequest = require('../models/MoneyRequest');
+      const moneyRequest = await MoneyRequest.findById(requestId)
+        .populate('booking', 'title description bookingDate')
+        .populate('serviceProvider', 'name');
+      
+      if (moneyRequest) {
+        serviceDetails = {
+          serviceName: moneyRequest.booking?.title || 'Service',
+          serviceProvider: moneyRequest.serviceProvider?.name || 'Unknown',
+          serviceDate: moneyRequest.booking?.bookingDate || new Date()
+        };
+        // No discount for money requests - use original amount
+        baseAmount = amount;
+        discountedAmount = amount;
+        discountApplied = 0;
+      }
+    }
+
+    // Check if sender has sufficient balance for the discounted amount
+    if (senderQPay.balance < discountedAmount) {
       return res.status(400).json({
         success: false,
         message: 'Insufficient balance'
       });
     }
 
-    // Get booking details if provided
-    let booking = null;
-    let serviceDetails = {};
-    
-    if (bookingId) {
-      booking = await Booking.findById(bookingId);
-      if (booking) {
-        serviceDetails = {
-          serviceName: booking.title,
-          serviceProvider: booking.serviceProvider?.name || 'Unknown',
-          serviceDate: booking.bookingDate
-        };
-      }
+    // Ensure amount is properly parsed and validated
+    const parsedAmount = parseFloat(discountedAmount);
+    if (isNaN(parsedAmount) || parsedAmount <= 0) {
+      console.error('Invalid amount detected:', { amount, parsedAmount, isNaN: isNaN(parsedAmount) });
+      return res.status(400).json({
+        success: false,
+        message: 'Invalid amount provided'
+      });
     }
+    
+    console.log('Amount parsing debug:', {
+      originalAmount: amount,
+      baseAmount: baseAmount,
+      discountedAmount: discountedAmount,
+      discountApplied: discountApplied,
+      parsedAmount: parsedAmount,
+      parsedType: typeof parsedAmount,
+      stringified: JSON.stringify(amount),
+      parsedStringified: JSON.stringify(parsedAmount)
+    });
+    
+    // Create transaction record with additional amount tracking
+    const transaction = new TransactionHistory({
+      senderId,
+      receiverId,
+      amount: parsedAmount,
+      baseAmount: baseAmount,
+      discountApplied: discountApplied,
+      description: requestId ? 
+        `Payment for money request: ${serviceDetails.serviceName || 'Service'}` : 
+        `Payment for service: ${serviceDetails.serviceName || 'Service'}`,
+      bookingId,
+      requestId,
+      serviceDetails,
+      status: 'pending',
+      currency: 'BDT',
+      paymentMethod: 'QPay'
+    });
+    
+    // Store original amount as a note for debugging
+    transaction.notes = `Original request amount: ${amount}, Final amount: ${parsedAmount}, Base amount: ${baseAmount}, Discount: ${discountApplied}%`;
 
-         // Create transaction record
-     const transaction = new TransactionHistory({
-       senderId,
-       receiverId,
-       amount: parseFloat(amount),
-       description: `Payment for service: ${serviceDetails.serviceName || 'Service'}`,
-       bookingId,
-       serviceDetails,
-       status: 'pending',
-       currency: 'BDT',
-       paymentMethod: 'QPay'
-     });
-
-         console.log('Transaction object before save:', {
-       transactionId: transaction.transactionId,
-       senderId: transaction.senderId,
-       receiverId: transaction.receiverId,
-       amount: transaction.amount,
-       amountType: typeof transaction.amount,
-       amountValue: transaction.amount
-     });
+    console.log('Transaction object before save:', {
+      transactionId: transaction.transactionId,
+      senderId: transaction.senderId,
+      receiverId: transaction.receiverId,
+      amount: transaction.amount,
+      baseAmount: transaction.baseAmount,
+      discountApplied: transaction.discountApplied,
+      amountType: typeof transaction.amount,
+      amountValue: transaction.amount,
+      amountStringified: JSON.stringify(transaction.amount),
+      amountToFixed: typeof transaction.amount === 'number' ? transaction.amount.toFixed(2) : 'N/A'
+    });
 
     // Ensure transactionId is generated
     if (!transaction.transactionId) {
@@ -114,6 +189,17 @@ const sendMoney = async (req, res) => {
 
     try {
       await transaction.save();
+      
+      // Debug: Check what was actually saved
+      console.log('Transaction saved successfully. Database record:', {
+        _id: transaction._id,
+        transactionId: transaction.transactionId,
+        amount: transaction.amount,
+        amountType: typeof transaction.amount,
+        amountStringified: JSON.stringify(transaction.amount),
+        amountToFixed: typeof transaction.amount === 'number' ? transaction.amount.toFixed(2) : 'N/A'
+      });
+      
     } catch (saveError) {
       console.error('Error saving transaction:', saveError);
       return res.status(500).json({
@@ -124,8 +210,8 @@ const sendMoney = async (req, res) => {
 
     // Update balances (deduct from sender, add to receiver)
     try {
-      await senderQPay.updateBalance(-amount);
-      await receiverQPay.updateBalance(amount);
+      await senderQPay.updateBalance(-transaction.amount);
+      await receiverQPay.updateBalance(transaction.amount);
     } catch (balanceError) {
       console.error('Error updating balances:', balanceError);
       // If balance update fails, delete the transaction
@@ -153,6 +239,20 @@ const sendMoney = async (req, res) => {
         await booking.save();
       } catch (bookingError) {
         console.error('Error updating booking status:', bookingError);
+        // Continue anyway as the payment was successful
+      }
+    }
+
+    // Update money request status to 'paid' if requestId exists
+    if (requestId) {
+      try {
+        const MoneyRequest = require('../models/MoneyRequest');
+        await MoneyRequest.findByIdAndUpdate(requestId, { 
+          status: 'paid',
+          paidDate: new Date()
+        });
+      } catch (moneyRequestError) {
+        console.error('Error updating money request status:', moneyRequestError);
         // Continue anyway as the payment was successful
       }
     }
@@ -344,6 +444,30 @@ const downloadReceipt = async (req, res) => {
       .populate('receiverId', 'name email phone')
       .populate('bookingId', 'title description bookingDate');
 
+    // Get the service provider's charge and discount
+    let providerCharge = 0;
+    let providerDiscount = 0;
+    if (transaction.receiverId) {
+      try {
+        const User = require('../models/User');
+        const provider = await User.findById(transaction.receiverId._id);
+        if (provider && provider.charge) {
+          providerCharge = parseFloat(provider.charge) || 0;
+        }
+        const providerQPay = await QPay.findByUserId(transaction.receiverId._id);
+        if (providerQPay && typeof providerQPay.discount === 'number') {
+          providerDiscount = providerQPay.discount;
+        }
+      } catch (error) {
+        console.error('Error fetching provider charge/discount:', error);
+      }
+    }
+    
+    // Fallback to booking charge if provider charge is not available
+    if (providerCharge === 0 && transaction.bookingId && transaction.bookingId.charge) {
+      providerCharge = parseFloat(transaction.bookingId.charge) || 0;
+    }
+
     if (!transaction) {
       return res.status(404).json({
         success: false,
@@ -356,10 +480,15 @@ const downloadReceipt = async (req, res) => {
       _id: transaction._id,
       amount: transaction.amount,
       amountType: typeof transaction.amount,
+      amountValue: transaction.amount,
+      amountStringified: JSON.stringify(transaction.amount),
+      amountToFixed: typeof transaction.amount === 'number' ? transaction.amount.toFixed(2) : 'N/A',
       senderId: transaction.senderId,
       receiverId: transaction.receiverId,
       serviceDetails: transaction.serviceDetails,
-      currency: transaction.currency
+      currency: transaction.currency,
+      createdAt: transaction.createdAt,
+      completedAt: transaction.completedAt
     });
 
     // Check if user is involved in this transaction
@@ -384,177 +513,158 @@ const downloadReceipt = async (req, res) => {
     // Pipe PDF to response
     doc.pipe(res);
 
-         // Add company logo/header with modern styling
-     doc.rect(0, 0, 595, 80)
-        .fill('#667eea');
-     
-     doc.fillColor('white')
-        .fontSize(32)
+         // Add company header
+     doc.fontSize(24)
         .font('Helvetica-Bold')
-        .text('QuickFix', 50, 25, { align: 'center', width: 495 })
+        .text('QuickFix', 50, 50, { align: 'center', width: 495 })
         .moveDown(0.5);
 
-     doc.fontSize(16)
+     doc.fontSize(14)
         .font('Helvetica')
         .text('Professional Service Platform', { align: 'center' })
         .moveDown(2);
-     
-     // Reset fill color for rest of content
-     doc.fillColor('black');
 
-         // Add receipt title with modern styling
-     doc.moveDown(1);
-     doc.rect(50, 100, 495, 40)
-        .fill('#f8f9fa');
-     
-     doc.fillColor('#2c3e50')
-        .fontSize(22)
+     // Add receipt title
+     doc.fontSize(20)
         .font('Helvetica-Bold')
-        .text('PAYMENT RECEIPT', 50, 110, { align: 'center', width: 495 });
-     
-     doc.fillColor('black');
-     doc.moveDown(3);
+        .text('PAYMENT RECEIPT', { align: 'center' })
+        .moveDown(2);
 
-         // Add transaction details with modern styling
-     doc.rect(50, 170, 240, 80)
-        .fill('#e3f2fd')
-        .stroke('#2196f3');
-     
-     doc.fillColor('#1976d2')
-        .fontSize(14)
+     // Add transaction details
+     doc.fontSize(14)
         .font('Helvetica-Bold')
-        .text('Transaction Details', 60, 180);
-     
-     doc.fillColor('black')
-        .fontSize(10)
+        .text('Transaction Details', 50, 150)
+        .moveDown(0.5);
+
+     doc.fontSize(10)
         .font('Helvetica')
-        .text(`Transaction ID: ${transaction.transactionId}`, 60, 200)
+        .text(`Transaction ID: ${transaction.transactionId}`)
         .text(`Date: ${new Date(transaction.createdAt).toLocaleDateString('en-US', {
           year: 'numeric',
           month: 'long',
           day: 'numeric',
           hour: '2-digit',
           minute: '2-digit'
-        })}`, 60, 215)
-        .text(`Status: ${transaction.status.toUpperCase()}`, 60, 230)
-        .text(`Payment Method: ${transaction.paymentMethod || 'QPay'}`, 60, 245);
+        })}`)
+        .text(`Status: ${transaction.status.toUpperCase()}`)
+        .text(`Payment Method: ${transaction.paymentMethod || 'QPay'}`)
+        .moveDown(1);
 
-         // Add payment information with modern styling
-     doc.rect(310, 170, 240, 80)
-        .fill('#e8f5e8')
-        .stroke('#4caf50');
-     
-     doc.fillColor('#2e7d32')
-        .fontSize(14)
-        .font('Helvetica-Bold')
-        .text('Payment Information', 320, 180);
-     
-     // Ensure amount is properly formatted
-     const formattedAmount = typeof transaction.amount === 'number' ? 
-       transaction.amount.toFixed(2) : 
-       parseFloat(transaction.amount || 0).toFixed(2);
-     
-     console.log('Amount formatting debug:', {
-       originalAmount: transaction.amount,
-       originalType: typeof transaction.amount,
-       formattedAmount: formattedAmount,
-       parsedAmount: parseFloat(transaction.amount || 0)
-     });
-     
-     doc.fillColor('black')
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Currency: ${transaction.currency || 'BDT'}`, 320, 215)
-        .text(`Description: ${transaction.description}`, 320, 230);
-     
-     // Highlight the amount prominently
-     doc.fillColor('#4caf50')
-        .fontSize(16)
-        .font('Helvetica-Bold')
-        .text(`Amount: ৳${formattedAmount}`, 320, 200);
+          // Add payment information
+    doc.fontSize(14)
+       .font('Helvetica-Bold')
+       .text('Payment Information', 50, 220)
+       .moveDown(0.5);
 
-         // Add sender and receiver information with modern styling
-     const isSender = transaction.senderId._id.toString() === userId;
-     const otherParty = isSender ? transaction.receiverId : transaction.senderId;
-     const currentUser = isSender ? transaction.senderId : transaction.receiverId;
+    // Always compute values from provider's base fare (Users) and discount (QPay)
+    const baseAmount = (providerCharge && !isNaN(parseFloat(providerCharge))) ? parseFloat(providerCharge) : 0;
+    const discountApplied = (typeof providerDiscount === 'number' && !isNaN(providerDiscount)) ? providerDiscount : 0;
+    const discountedPrice = parseFloat((baseAmount * (discountApplied / 100)).toFixed(2));
+    const finalAmount = parseFloat((Math.max(0, baseAmount - discountedPrice)).toFixed(2));
 
-     // User information (who is viewing the receipt)
-     doc.rect(50, 280, 240, 80)
-        .fill('#fff3e0')
-        .stroke('#ff9800');
-     
-     doc.fillColor('#e65100')
-        .fontSize(14)
-        .font('Helvetica-Bold')
-        .text('Your Information', 60, 290);
-     
-     doc.fillColor('black')
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Name: ${currentUser.name}`, 60, 310)
-        .text(`Email: ${currentUser.email}`, 60, 325)
-        .text(`Phone: ${currentUser.phone || 'N/A'}`, 60, 340);
+    // Display the amount (final discounted amount)
+    const displayAmount = finalAmount;
+    doc.fontSize(16)
+       .font('Helvetica-Bold')
+       .text(`Amount: BDT ${displayAmount.toFixed(2)}`)
+       .moveDown(0.5);
 
-     // Other party information
-     doc.rect(310, 280, 240, 80)
-        .fill('#f3e5f5')
-        .stroke('#9c27b0');
-     
-     doc.fillColor('#6a1b9a')
-        .fontSize(14)
-        .font('Helvetica-Bold')
-        .text(isSender ? 'Service Provider' : 'Client', 320, 290);
-     
-     doc.fillColor('black')
-        .fontSize(10)
-        .font('Helvetica')
-        .text(`Name: ${otherParty.name}`, 320, 310)
-        .text(`Email: ${otherParty.email}`, 320, 325)
-        .text(`Phone: ${otherParty.phone || 'N/A'}`, 320, 340);
+    doc.fontSize(10)
+       .font('Helvetica')
+       .text(`Currency: ${transaction.currency || 'BDT'}`)
+       .text(`Description: ${transaction.description}`)
+       .moveDown(0.5);
 
-         // Add service details if available with modern styling
-     if (transaction.serviceDetails?.serviceName) {
-       doc.rect(50, 390, 495, 60)
-          .fill('#e8faf5')
-          .stroke('#00bcd4');
-       
-       doc.fillColor('#00695c')
-          .fontSize(14)
-          .font('Helvetica-Bold')
-          .text('Service Details', 60, 400);
-       
-       doc.fillColor('black')
-          .fontSize(10)
-          .font('Helvetica')
-          .text(`Service: ${transaction.serviceDetails.serviceName}`, 60, 420)
-          .text(`Provider: ${transaction.serviceDetails.serviceProvider}`, 60, 435)
-          .text(`Service Date: ${transaction.serviceDetails.serviceDate ? 
-            new Date(transaction.serviceDetails.serviceDate).toLocaleDateString() : 'N/A'}`, 60, 450);
-     }
+    // Payment breakdown
+    doc.fontSize(12)
+       .font('Helvetica-Bold')
+       .text('Payment Breakdown:')
+       .moveDown(0.3);
 
-         // Add footer with modern styling
-     const footerY = transaction.serviceDetails?.serviceName ? 480 : 420;
-     
-     doc.rect(0, footerY, 595, 100)
-        .fill('#f5f5f5');
-     
-     doc.fillColor('#666')
-        .fontSize(12)
-        .font('Helvetica-Bold')
-        .text('Thank you for using QuickFix!', 50, footerY + 20, { align: 'center', width: 495 })
-        .moveDown(0.5);
-     
-     doc.fontSize(10)
-        .font('Helvetica')
-        .text('This is an official receipt for your records.', { align: 'center' })
-        .moveDown(1)
-        .text(`Generated on: ${new Date().toLocaleString()}`, { align: 'center' });
-     
-     // Add QuickFix branding
-     doc.fillColor('#667eea')
-        .fontSize(14)
-        .font('Helvetica-Bold')
-        .text('QuickFix - Professional Service Platform', { align: 'center' });
+    doc.fontSize(10)
+       .font('Helvetica')
+       .text(`Base Amount: BDT ${baseAmount.toFixed(2)}`)
+       .text(`Discount Applied: -${discountApplied}%`)
+       .text(`Discounted Price: BDT ${discountedPrice.toFixed(2)}`)
+       .text(`Final Amount: BDT ${finalAmount.toFixed(2)}`)
+       .moveDown(0.5);
+
+    doc.moveDown(0.5);
+
+        // Add sender and receiver information with modern styling
+    const isSender = transaction.senderId._id.toString() === userId;
+    const otherParty = isSender ? transaction.receiverId : transaction.senderId;
+    const currentUser = isSender ? transaction.senderId : transaction.receiverId;
+
+    // User information (who is viewing the receipt)
+    doc.fontSize(14)
+       .font('Helvetica-Bold')
+       .text('Your Information')
+       .moveDown(0.5);
+
+    doc.fontSize(10)
+       .font('Helvetica')
+       .text(`Name: ${currentUser.name}`)
+       .text(`Email: ${currentUser.email}`)
+       .text(`Phone: ${currentUser.phone || 'N/A'}`)
+       .moveDown(1);
+
+    // Other party information
+    doc.fontSize(14)
+       .font('Helvetica-Bold')
+       .text(isSender ? 'Service Provider' : 'Client')
+       .moveDown(0.5);
+
+    doc.fontSize(10)
+       .font('Helvetica')
+       .text(`Name: ${otherParty.name}`)
+       .text(`Email: ${otherParty.email}`)
+       .text(`Phone: ${otherParty.phone || 'N/A'}`)
+       .moveDown(1);
+
+    // Add service details if available
+    if (transaction.serviceDetails?.serviceName) {
+      doc.fontSize(14)
+         .font('Helvetica-Bold')
+         .text('Service Details')
+         .moveDown(0.5);
+
+      doc.fontSize(10)
+         .font('Helvetica')
+         .text(`Service: ${transaction.serviceDetails.serviceName}`)
+         .text(`Provider: ${transaction.serviceDetails.serviceProvider}`)
+         .text(`Service Date: ${transaction.serviceDetails.serviceDate ? 
+           new Date(transaction.serviceDetails.serviceDate).toLocaleDateString() : 'N/A'}`)
+         .moveDown(1);
+    }
+
+    // Add payment summary
+    doc.fontSize(14)
+       .font('Helvetica-Bold')
+       .text('Payment Summary', { align: 'center' })
+       .moveDown(0.5);
+    
+    doc.fontSize(12)
+       .font('Helvetica-Bold')
+       .text(`Total Amount: BDT ${displayAmount.toFixed(2)}`, { align: 'center' })
+       .moveDown(0.3);
+
+    // Add footer
+    doc.fontSize(12)
+       .font('Helvetica-Bold')
+       .text('Thank you for using QuickFix!', { align: 'center' })
+       .moveDown(0.5);
+
+    doc.fontSize(10)
+       .font('Helvetica')
+       .text('This is an official receipt for your records.', { align: 'center' })
+       .moveDown(1)
+       .text(`Generated on: ${new Date().toLocaleString()}`, { align: 'center' });
+
+    // Add QuickFix branding
+    doc.fontSize(14)
+       .font('Helvetica-Bold')
+       .text('QuickFix - Professional Service Platform', { align: 'center' });
 
     // Finalize PDF
     doc.end();

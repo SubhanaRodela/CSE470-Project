@@ -514,7 +514,7 @@ const Register = () => {
                     onBlur={(e) => e.target.style.borderColor = '#ddd'}
                   />
                   <small style={{ color: '#666', fontSize: '12px' }}>
-                    Enter your base service charge in Taka (minimum ৳0.00)
+                    Enter your base service charge in Taka (minimum 0.00)
                   </small>
                 </div>
               </>

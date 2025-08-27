@@ -15,13 +15,15 @@ const Pay = () => {
   
   // Get payment details from URL params
   const bookingId = searchParams.get('bookingId');
+  const requestId = searchParams.get('requestId');
   const amount = searchParams.get('amount');
   const providerId = searchParams.get('providerId');
   const providerName = searchParams.get('providerName');
   const serviceName = searchParams.get('serviceName');
+  const paymentType = searchParams.get('type');
   
-  // Check if this is a payment request
-  const isPaymentRequest = bookingId && amount && providerId;
+  // Check if this is a payment request (either booking or money request)
+  const isPaymentRequest = (bookingId && amount && providerId) || (requestId && amount && providerName && paymentType === 'moneyRequest' && providerId);
 
   useEffect(() => {
     const userData = localStorage.getItem('user');
@@ -36,11 +38,26 @@ const Pay = () => {
     setUser(userInfo);
     setLoading(false);
     
+    // Debug: Log all URL parameters
+    console.log('Pay page URL parameters:', {
+      bookingId,
+      requestId,
+      amount,
+      amountType: typeof amount,
+      amountParsed: parseFloat(amount),
+      amountStringified: JSON.stringify(amount),
+      providerId,
+      providerName,
+      serviceName,
+      paymentType,
+      isPaymentRequest
+    });
+    
     // If this is a payment request, show the send money modal
     if (isPaymentRequest) {
       setShowSendMoneyModal(true);
     }
-  }, [navigate, isPaymentRequest]);
+  }, [navigate, isPaymentRequest, bookingId, requestId, amount, providerId, providerName, serviceName, paymentType]);
 
   if (loading) {
     return <div className="text-center mt-5">Loading...</div>;
@@ -110,18 +127,26 @@ const Pay = () => {
            isOpen={showSendMoneyModal}
            onClose={() => {
              setShowSendMoneyModal(false);
+             // Navigate back to user-service without payment completion status
              navigate('/user-service');
            }}
            onSuccess={() => {
              setShowSendMoneyModal(false);
-             navigate('/user-service');
+             // Navigate back to user-service with payment completion status
+             if (requestId) {
+               navigate(`/user-service?requestId=${requestId}&paymentStatus=completed`);
+             } else {
+               navigate('/user-service');
+             }
            }}
            paymentDetails={{
              bookingId,
+             requestId,
              amount: parseFloat(amount),
              providerId,
              providerName,
-             serviceName
+             serviceName,
+             paymentType
            }}
          />
        )}
